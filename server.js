@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import { parse as parseCsv } from 'csv-parse/sync';
 const { Pool } = pg;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -11,7 +12,9 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const BASE = 'https://fctoolshub.com';
 const FC27_DATASET_URL = 'https://raw.githubusercontent.com/LakshmiKanth11/EA_FC_ANALYSIS/main/EA_FC_PLAYERS_DATASET_AND_%20DASHBOARD/data/players_search.json';
 const FC27_SNAPSHOT_DATE = '2026-09-12';
+const FC27_CSV_URL = 'https://raw.githubusercontent.com/LakshmiKanth11/EA_FC_ANALYSIS/main/EA_FC_PLAYERS_DATASET_AND_%20DASHBOARD/data/players.csv';
 let fc27Players = null;
+let fc27FullById = null;
 
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -217,6 +220,36 @@ function parseDetails(html, fallback={}) {
   };
 }
 
+async function ensureFc27FullDataset() {
+  if (fc27FullById) return fc27FullById;
+  try {
+    const r = await fetch(FC27_CSV_URL, {
+      headers: {'user-agent':'DeporCareerDirector/1.0','accept':'text/csv,*/*'},
+      redirect:'follow'
+    });
+    if (!r.ok) throw new Error('FC27 CSV download failed: ' + r.status);
+    const csv = await r.text();
+    const rows = parseCsv(csv, { columns:true, skip_empty_lines:true, relax_quotes:true });
+    fc27FullById = new Map(rows.map(x => [String(x.player_id), x]));
+    console.log('FC27 full dataset loaded:', fc27FullById.size);
+  } catch (e) {
+    console.warn('FC27 full dataset unavailable:', e.message);
+    fc27FullById = new Map();
+  }
+  return fc27FullById;
+}
+
+function ageFromBirthdate(birthdate) {
+  if (!birthdate) return null;
+  const b = new Date(birthdate);
+  if (Number.isNaN(b.getTime())) return null;
+  const at = new Date('2026-07-01T00:00:00Z');
+  let age = at.getUTCFullYear() - b.getUTCFullYear();
+  const md = at.getUTCMonth() - b.getUTCMonth();
+  if (md < 0 || (md === 0 && at.getUTCDate() < b.getUTCDate())) age--;
+  return age;
+}
+
 async function ensureFc27Dataset() {
   if (fc27Players?.length) return fc27Players;
 
@@ -310,20 +343,24 @@ async function getFc27Player(id) {
   const players = await ensureFc27Dataset();
   const p = players.find(x => String(x.id) === String(id));
   if (!p) return null;
+  const full = (await ensureFc27FullDataset()).get(String(id)) || {};
   return {
     id: String(p.id),
     name: p.name || '',
     overall: Number(p.ovr || 0) || null,
     potential: null,
-    age: null,
+    age: ageFromBirthdate(full.birthdate),
+    birthdate: full.birthdate || '',
     position: p.pos || '',
-    alternatePositions: '',
+    alternatePositions: full.alternate_positions || '',
     club: p.club || '',
     league: p.league || '',
     nationality: p.nat || '',
     preferredFoot: p.foot || '',
     skillMoves: Number(p.sm || 0) || null,
     weakFoot: Number(p.wf || 0) || null,
+    heightCm: Number(full.height_cm || 0) || null,
+    weightKg: Number(full.weight_kg || 0) || null,
     playstyles: p.ps || '',
     pace: Number(p.pac || 0) || null,
     shooting: Number(p.sho || 0) || null,
