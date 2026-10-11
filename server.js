@@ -339,6 +339,106 @@ async function searchFc27Players(q) {
     }));
 }
 
+function overallToClubLevelServer(ovr) {
+  const n=Number(ovr||0);
+  if(!n)return 0;
+  if(n>=90)return 9.5;
+  if(n>=87)return 8.8;
+  if(n>=84)return 8.0;
+  if(n>=81)return 7.2;
+  if(n>=78)return 6.4;
+  if(n>=75)return 5.6;
+  if(n>=72)return 4.9;
+  if(n>=69)return 4.2;
+  return 3.6;
+}
+
+function inferMarketServer(nat) {
+  const n=String(nat||'').toLowerCase();
+  if(n.includes('spain')||n.includes('españa'))return 'Espanya';
+  if(n.includes('portugal'))return 'Portugal';
+  const ibero=['argentina','uruguay','paraguay','chile','peru','perú','bolivia','ecuador','colombia','venezuela','mexico','méxico','costa rica','panama','panamá','guatemala','honduras','el salvador','nicaragua','dominican','república dominicana','cuba','brazil','brasil'];
+  if(ibero.some(x=>n.includes(x)))return 'Iberoamèrica';
+  return 'Altres';
+}
+
+function inferOriginLevelServer(club, league, ovr) {
+  const l=String(league||'').toLowerCase();
+  const c=String(club||'').toLowerCase();
+  let v=5.0;
+  if(/premier league|laliga|serie a|bundesliga|ligue 1/.test(l))v=7.0;
+  else if(/liga portugal|eredivisie/.test(l))v=6.2;
+  else if(/mls|major league soccer|saudi/.test(l))v=5.8;
+  else if(/segunda|laliga hypermotion|championship|serie b|2\. bundesliga/.test(l))v=4.8;
+  const elite=['real madrid','barcelona','manchester city','liverpool','arsenal','bayern','paris saint','psg','inter milan','juventus','atlético','atletico'];
+  if(elite.some(x=>c.includes(x)))v=Math.max(v,8.5);
+  if(Number(ovr)>=86)v=Math.max(v,6.5);
+  return Number(v.toFixed(1));
+}
+
+function scoutingRealismScore(p, full, clubStatus=4.6) {
+  const ovr=Number(p.ovr||0);
+  const age=ageFromBirthdate(full?.birthdate);
+  const level=overallToClubLevelServer(ovr);
+  const origin=inferOriginLevelServer(p.club,p.league,ovr);
+  const market=inferMarketServer(p.nat);
+  let score=100;
+  const reasons=[];
+  const hit=(pts,msg)=>{score-=pts;reasons.push(msg)};
+  const boost=(pts,msg)=>{score+=pts;reasons.push(msg)};
+  const gap=level-clubStatus;
+
+  if(gap>2.4)hit(28,'Nivell molt per sobre del projecte actual');
+  else if(gap>1.7)hit(18,'Salt esportiu exigent');
+  else if(gap>1.0)hit(9,'Per sobre del mercat natural');
+
+  if(ovr>=88)hit(24,'Estatus de superestrella');
+  else if(ovr>=85)hit(15,'Estatus internacional molt alt');
+  else if(ovr>=82)hit(7,'Reputació elevada');
+
+  if(origin-clubStatus>3)hit(10,'Club d’origen molt superior');
+  else if(origin-clubStatus>2)hit(6,'Club d’origen superior');
+
+  if(market==='Espanya')boost(8,'Mercat prioritari');
+  else if(market==='Portugal')boost(7,'Mercat prioritari');
+  else if(market==='Iberoamèrica')boost(5,'Mercat coherent');
+  else hit(4,'Fora dels mercats prioritaris');
+
+  if(age){
+    if(age<=20 && ovr>=80)hit(8,'Talent jove amb alta competència');
+    else if(age>=29 && age<=33)boost(2,'Edat compatible amb una oportunitat de mercat');
+    else if(age>=34 && ovr>=82)boost(3,'Final de carrera pot obrir una finestra');
+  }
+
+  if(ovr>=88 && clubStatus<5.5)score=Math.min(score,49);
+  else if(ovr>=85 && clubStatus<5.0)score=Math.min(score,59);
+
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  return {score,reasons:reasons.slice(0,3),age,level,origin,market};
+}
+
+async function recommendFc27Players(position, clubStatus=4.6, limit=12) {
+  const players=await ensureFc27Dataset();
+  const fullMap=await ensureFc27FullDataset();
+  const target=String(position||'').toUpperCase();
+  const matches=players.filter(p=>{
+    if(p.gender==='Women')return false;
+    const full=fullMap.get(String(p.id))||{};
+    const positions=[String(p.pos||'').toUpperCase(), ...String(full.alternate_positions||'').toUpperCase().split(/[ ,/]+/).filter(Boolean)];
+    return positions.includes(target);
+  });
+  return matches.map(p=>{
+    const full=fullMap.get(String(p.id))||{};
+    const fit=scoutingRealismScore(p,full,clubStatus);
+    return {
+      id:String(p.id),name:p.name,overall:Number(p.ovr||0)||null,position:p.pos||'',
+      alternatePositions:full.alternate_positions||'',club:p.club||'',league:p.league||'',
+      nationality:p.nat||'',age:fit.age,market:fit.market,playerLevel:fit.level,
+      originLevel:fit.origin,scoutingScore:fit.score,reasons:fit.reasons
+    };
+  }).sort((a,b)=>b.scoutingScore-a.scoutingScore || (b.overall||0)-(a.overall||0)).slice(0,limit);
+}
+
 async function getFc27Player(id) {
   const players = await ensureFc27Dataset();
   const p = players.find(x => String(x.id) === String(id));
@@ -449,6 +549,15 @@ const server = http.createServer(async (req, res) => {
       const payload = {players, source:'EA FC27 dataset', snapshotDate:FC27_SNAPSHOT_DATE};
       await writeCache(cacheKey, payload);
       return json(res, 200, payload, 'public, max-age=3600');
+    }
+
+    if (u.pathname === '/api/players/recommend') {
+      const position=String(u.searchParams.get('position')||'').trim().toUpperCase();
+      const clubStatus=Number(u.searchParams.get('clubStatus')||4.6);
+      const limit=Math.max(1,Math.min(20,Number(u.searchParams.get('limit')||12)));
+      if(!position) return json(res,400,{error:'Falta la posició.'});
+      const players=await recommendFc27Players(position,clubStatus,limit);
+      return json(res,200,{players,source:'EA FC27 dataset',snapshotDate:FC27_SNAPSHOT_DATE},'public, max-age=3600');
     }
 
     if (u.pathname === '/api/players/detail') {
