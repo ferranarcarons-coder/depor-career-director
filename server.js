@@ -2,11 +2,77 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
+const { Pool } = pg;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 10000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const BASE = 'https://fctoolshub.com';
+
+const pool = process.env.DATABASE_URL ? new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false
+}) : null;
+
+let dbReady = false;
+
+async function initDb() {
+  if (!pool) return false;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS career_state (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS player_cache (
+      cache_key TEXT PRIMARY KEY,
+      payload JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  dbReady = true;
+  return true;
+}
+
+async function readCached(key, maxAgeSeconds) {
+  if (!dbReady) return null;
+  const r = await pool.query(
+    'SELECT payload, updated_at FROM player_cache WHERE cache_key = $1',
+    [key]
+  );
+  if (!r.rowCount) return null;
+  const age = (Date.now() - new Date(r.rows[0].updated_at).getTime()) / 1000;
+  return age <= maxAgeSeconds ? r.rows[0].payload : null;
+}
+
+async function writeCache(key, payload) {
+  if (!dbReady) return;
+  await pool.query(
+    `INSERT INTO player_cache(cache_key,payload,updated_at)
+     VALUES($1,$2::jsonb,NOW())
+     ON CONFLICT(cache_key) DO UPDATE SET payload=EXCLUDED.payload, updated_at=NOW()`,
+    [key, JSON.stringify(payload)]
+  );
+}
+
+async function readBody(req) {
+  return await new Promise((resolve, reject) => {
+    let raw = '';
+    req.on('data', chunk => {
+      raw += chunk;
+      if (raw.length > 2_000_000) {
+        reject(new Error('Payload massa gran'));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try { resolve(raw ? JSON.parse(raw) : {}); }
+      catch { reject(new Error('JSON no vàlid')); }
+    });
+    req.on('error', reject);
+  });
+}
 
 function json(res, status, body, cache='no-store') {
   res.writeHead(status, {
@@ -171,19 +237,48 @@ function serveIndex(res) {
   });
 }
 
-http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, 'http://localhost');
 
     if (u.pathname === '/health') {
-      return json(res, 200, {ok:true, service:'depor-career-director'});
+      return json(res, 200, {
+        ok:true,
+        service:'depor-career-director',
+        database: dbReady ? 'connected' : (pool ? 'initializing' : 'not_configured')
+      });
+    }
+
+    if (u.pathname === '/api/state' && req.method === 'GET') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const r = await pool.query('SELECT data, updated_at FROM career_state WHERE id = $1', ['main']);
+      if (!r.rowCount) return json(res, 200, {state:null});
+      return json(res, 200, {state:r.rows[0].data, updatedAt:r.rows[0].updated_at}, 'no-store');
+    }
+
+    if (u.pathname === '/api/state' && req.method === 'POST') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const body = await readBody(req);
+      if (!body || typeof body.state !== 'object') return json(res, 400, {error:'Estat no vàlid.'});
+      await pool.query(
+        `INSERT INTO career_state(id,data,updated_at)
+         VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
+        ['main', JSON.stringify(body.state)]
+      );
+      return json(res, 200, {ok:true});
     }
 
     if (u.pathname === '/api/players/search') {
       const q = String(u.searchParams.get('q') || '').trim();
       if (q.length < 2) return json(res, 400, {error:'Escriu almenys 2 caràcters.'});
+      const cacheKey = 'search:' + q.toLowerCase();
+      const cached = await readCached(cacheKey, 86400);
+      if (cached) return json(res, 200, {...cached, cached:true}, 'public, max-age=3600');
       const players = await searchPlayers(q);
-      return json(res, 200, {players, source:'FC Tools Hub'}, 'public, max-age=3600');
+      const payload = {players, source:'FC Tools Hub'};
+      await writeCache(cacheKey, payload);
+      return json(res, 200, payload, 'public, max-age=3600');
     }
 
     if (u.pathname === '/api/players/detail') {
@@ -195,9 +290,14 @@ http.createServer(async (req, res) => {
         return json(res, 400, {error:'Falta la referència del jugador.'});
       }
       const target = url || BASE + '/es/database/fc27/players/' + id + '-' + slug;
+      const cacheKey = 'player:' + (id || target);
+      const cached = await readCached(cacheKey, 604800);
+      if (cached) return json(res, 200, {...cached, cached:true}, 'public, max-age=86400');
       const html = await fetchHtml(target);
       const player = parseDetails(html, {id, slug, url:target, name});
-      return json(res, 200, {player}, 'public, max-age=86400');
+      const payload = {player};
+      await writeCache(cacheKey, payload);
+      return json(res, 200, payload, 'public, max-age=86400');
     }
 
     return serveIndex(res);
@@ -207,6 +307,13 @@ http.createServer(async (req, res) => {
       detail:e.message
     });
   }
-}).listen(PORT, '0.0.0.0', () => {
-  console.log('Dépor Career Director listening on ' + PORT);
 });
+
+initDb()
+  .then(ok => console.log(ok ? 'Postgres connected' : 'Postgres not configured'))
+  .catch(err => console.error('Postgres init failed:', err.message))
+  .finally(() => {
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log('Dépor Career Director listening on ' + PORT);
+    });
+  });
