@@ -1,0 +1,13 @@
+{
+  "name": "depor-career-director",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Realistic FC27 career mode director for Deportivo de La Coruna",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
