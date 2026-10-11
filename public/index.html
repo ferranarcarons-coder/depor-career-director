@@ -389,8 +389,65 @@ const RULES_OBJECTIVES_V4='deporCareerDirectorRulesObjectivesV4';
 if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V4,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const RESET_SEASON_FIX='deporCareerDirectorResetSeasonEvolutionV1';
 if(!localStorage.getItem(RESET_SEASON_FIX)){state.matches=[];state.points=0;state.position=base.position;localStorage.setItem(RESET_SEASON_FIX,'1');localStorage.setItem(KEY,JSON.stringify(state));}
-const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
-function save(){localStorage.setItem(KEY,JSON.stringify(state));render();}
+const $=s=>document.querySelector(s); const $=s=>[...document.querySelectorAll(s)];
+
+let cloudSyncTimer=null;
+let cloudSyncEnabled=false;
+
+function mergeIncomingState(remote){
+  if(!remote || typeof remote!=='object') return;
+  state={...structuredClone(base),...remote,
+    finance:{...base.finance,...(remote.finance||{})},
+    setup:{...base.setup,...(remote.setup||{})},
+    shortlist:remote.shortlist||[],
+    latestAssessment:remote.latestAssessment||null,
+    matches:remote.matches||[],
+    nextMatch:{...base.nextMatch,...(remote.nextMatch||{})},
+    standings:remote.standings||[],
+    decisions:(remote.decisions||[]).map(d=>({...d,status:d.status||'open'})),
+    reviews:remote.reviews||[],
+    points:Number(remote.points||0)
+  };
+  localStorage.setItem(KEY,JSON.stringify(state));
+}
+
+async function cloudLoad(){
+  try{
+    const r=await fetch('/api/state',{cache:'no-store'});
+    if(!r.ok) throw new Error('cloud unavailable');
+    const data=await r.json();
+    cloudSyncEnabled=true;
+    const pill=document.querySelector('.status-pill');
+    if(pill) pill.innerHTML='<span class="dot"></span>Sincronitzat';
+    if(data.state){
+      mergeIncomingState(data.state);
+      render();
+    }else{
+      await cloudPush();
+    }
+  }catch(e){
+    cloudSyncEnabled=false;
+  }
+}
+
+async function cloudPush(){
+  if(!cloudSyncEnabled) return;
+  try{
+    await fetch('/api/state',{
+      method:'POST',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({state})
+    });
+  }catch(e){}
+}
+
+function scheduleCloudPush(){
+  if(!cloudSyncEnabled) return;
+  clearTimeout(cloudSyncTimer);
+  cloudSyncTimer=setTimeout(cloudPush,500);
+}
+
+function save(){localStorage.setItem(KEY,JSON.stringify(state));render();scheduleCloudPush();}
 function money(n){return `€${Number(n||0).toFixed(1)}M`}
 function num(n){return Number(n||0)}
 function salePressure(t){
@@ -584,7 +641,7 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
-nav();render();
+nav();render();cloudLoad();
 
 </script>
 </body>
