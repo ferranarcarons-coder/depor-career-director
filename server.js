@@ -9,6 +9,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 10000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const BASE = 'https://fctoolshub.com';
+const FC27_DATASET_URL = 'https://raw.githubusercontent.com/LakshmiKanth11/EA_FC_ANALYSIS/main/EA_FC_PLAYERS_DATASET_AND_%20DASHBOARD/data/players_search.json';
+const FC27_SNAPSHOT_DATE = '2026-09-12';
+let fc27Players = null;
 
 const pool = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -28,6 +31,13 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS player_cache (
       cache_key TEXT PRIMARY KEY,
       payload JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS fc27_dataset (
+      id TEXT PRIMARY KEY,
+      payload JSONB NOT NULL,
+      player_count INTEGER NOT NULL DEFAULT 0,
+      snapshot_date DATE,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
@@ -207,6 +217,128 @@ function parseDetails(html, fallback={}) {
   };
 }
 
+async function ensureFc27Dataset() {
+  if (fc27Players?.length) return fc27Players;
+
+  if (dbReady) {
+    const stored = await pool.query('SELECT payload FROM fc27_dataset WHERE id = $1', ['ea-fc27']);
+    if (stored.rowCount && Array.isArray(stored.rows[0].payload) && stored.rows[0].payload.length) {
+      fc27Players = stored.rows[0].payload;
+      console.log('FC27 dataset loaded from Postgres:', fc27Players.length);
+      return fc27Players;
+    }
+  }
+
+  console.log('Downloading FC27 dataset...');
+  const r = await fetch(FC27_DATASET_URL, {
+    headers: {
+      'user-agent': 'DeporCareerDirector/1.0',
+      'accept': 'application/json'
+    },
+    redirect: 'follow'
+  });
+  if (!r.ok) throw new Error('FC27 dataset download failed: ' + r.status);
+  const players = await r.json();
+  if (!Array.isArray(players) || !players.length) throw new Error('FC27 dataset is empty or invalid');
+
+  fc27Players = players;
+
+  if (dbReady) {
+    await pool.query(
+      `INSERT INTO fc27_dataset(id,payload,player_count,snapshot_date,updated_at)
+       VALUES($1,$2::jsonb,$3,$4,NOW())
+       ON CONFLICT(id) DO UPDATE SET
+         payload=EXCLUDED.payload,
+         player_count=EXCLUDED.player_count,
+         snapshot_date=EXCLUDED.snapshot_date,
+         updated_at=NOW()`,
+      ['ea-fc27', JSON.stringify(players), players.length, FC27_SNAPSHOT_DATE]
+    );
+    console.log('FC27 dataset saved to Postgres:', players.length);
+  }
+  return players;
+}
+
+function playerDisplayName(p) {
+  return String(p?.name || '').trim();
+}
+
+function fc27SearchScore(p, q) {
+  const name = playerDisplayName(p).toLowerCase();
+  const club = String(p?.club || '').toLowerCase();
+  const nat = String(p?.nat || '').toLowerCase();
+  const term = q.toLowerCase().trim();
+  if (!term) return 0;
+  if (name === term) return 1000;
+  if (name.startsWith(term)) return 800;
+  if (name.includes(term)) return 600;
+  const parts = term.split(/\s+/).filter(Boolean);
+  let score = 0;
+  for (const part of parts) {
+    if (name.includes(part)) score += 120;
+    if (club.includes(part)) score += 20;
+    if (nat.includes(part)) score += 10;
+  }
+  return score;
+}
+
+async function searchFc27Players(q) {
+  const players = await ensureFc27Dataset();
+  return players
+    .filter(p => p.gender !== 'Women')
+    .map(p => ({ p, score: fc27SearchScore(p, q) }))
+    .filter(x => x.score > 0)
+    .sort((a,b) => (b.score - a.score) || (Number(b.p.ovr||0) - Number(a.p.ovr||0)))
+    .slice(0, 12)
+    .map(({p}) => ({
+      id: String(p.id),
+      slug: String(p.id),
+      name: p.name,
+      overall: Number(p.ovr || 0) || null,
+      position: p.pos || '',
+      club: p.club || '',
+      league: p.league || '',
+      nationality: p.nat || '',
+      foot: p.foot || '',
+      gender: p.gender || 'Men',
+      playstyles: p.ps || '',
+      source: 'EA FC27 dataset'
+    }));
+}
+
+async function getFc27Player(id) {
+  const players = await ensureFc27Dataset();
+  const p = players.find(x => String(x.id) === String(id));
+  if (!p) return null;
+  return {
+    id: String(p.id),
+    name: p.name || '',
+    overall: Number(p.ovr || 0) || null,
+    potential: null,
+    age: null,
+    position: p.pos || '',
+    alternatePositions: '',
+    club: p.club || '',
+    league: p.league || '',
+    nationality: p.nat || '',
+    preferredFoot: p.foot || '',
+    skillMoves: Number(p.sm || 0) || null,
+    weakFoot: Number(p.wf || 0) || null,
+    playstyles: p.ps || '',
+    pace: Number(p.pac || 0) || null,
+    shooting: Number(p.sho || 0) || null,
+    passing: Number(p.pas || 0) || null,
+    dribbling: Number(p.dri || 0) || null,
+    defending: Number(p.def || 0) || null,
+    physicality: Number(p.phy || 0) || null,
+    value: null,
+    wage: null,
+    contract: '',
+    snapshotDate: FC27_SNAPSHOT_DATE,
+    source: 'EA public ratings dataset'
+  };
+}
+
 async function searchPlayers(q) {
   const query = encodeURIComponent(q.trim());
   const candidates = [
@@ -245,7 +377,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         ok:true,
         service:'depor-career-director',
-        database: dbReady ? 'connected' : (pool ? 'initializing' : 'not_configured')
+        database: dbReady ? 'connected' : (pool ? 'initializing' : 'not_configured'),
+        fc27Dataset: fc27Players?.length || 0
       });
     }
 
@@ -272,11 +405,11 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/players/search') {
       const q = String(u.searchParams.get('q') || '').trim();
       if (q.length < 2) return json(res, 400, {error:'Escriu almenys 2 caràcters.'});
-      const cacheKey = 'search:' + q.toLowerCase();
+      const cacheKey = 'fc27-search:' + q.toLowerCase();
       const cached = await readCached(cacheKey, 86400);
       if (cached) return json(res, 200, {...cached, cached:true}, 'public, max-age=3600');
-      const players = await searchPlayers(q);
-      const payload = {players, source:'FC Tools Hub'};
+      const players = await searchFc27Players(q);
+      const payload = {players, source:'EA FC27 dataset', snapshotDate:FC27_SNAPSHOT_DATE};
       await writeCache(cacheKey, payload);
       return json(res, 200, payload, 'public, max-age=3600');
     }
@@ -289,12 +422,11 @@ const server = http.createServer(async (req, res) => {
       if (!url && (!id || !slug)) {
         return json(res, 400, {error:'Falta la referència del jugador.'});
       }
-      const target = url || BASE + '/es/database/fc27/players/' + id + '-' + slug;
-      const cacheKey = 'player:' + (id || target);
+      const cacheKey = 'fc27-player:' + id;
       const cached = await readCached(cacheKey, 604800);
       if (cached) return json(res, 200, {...cached, cached:true}, 'public, max-age=86400');
-      const html = await fetchHtml(target);
-      const player = parseDetails(html, {id, slug, url:target, name});
+      const player = await getFc27Player(id);
+      if (!player) return json(res, 404, {error:'Jugador no trobat a la base FC27.'});
       const payload = {player};
       await writeCache(cacheKey, payload);
       return json(res, 200, payload, 'public, max-age=86400');
