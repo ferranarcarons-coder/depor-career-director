@@ -98,6 +98,15 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
 
 /* Live FC27 database search */
 .live-search-results{margin-top:10px;display:grid;gap:8px}.live-player-result{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid #e6ebf1;border-radius:12px;background:#fff;cursor:pointer;text-align:left}.live-player-result:hover{border-color:#9fc8ff;background:#f8fbff}.live-player-result strong{display:block;font-size:11px}.live-player-result span{display:block;margin-top:3px;font-size:9px;color:var(--muted)}.live-player-result small{font-size:8px;font-weight:800;letter-spacing:.06em;color:var(--blue)}.live-status{margin-top:9px;font-size:9px;color:#8d99aa;min-height:14px}.live-status.error{color:var(--red)}.live-status.ok{color:var(--green)}
+
+.scout-finder-panel{margin-bottom:16px}
+.scout-finder-controls{display:grid;grid-template-columns:1fr minmax(180px,240px) auto;gap:14px;align-items:end;margin-top:10px}
+.scout-finder-copy{margin:0;color:var(--muted);font-size:11px;line-height:1.55;max-width:560px}
+.scout-finder-controls label{font-size:10px;color:var(--muted);font-weight:700}
+.scout-finder-controls select{display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid #dfe5ed;border-radius:10px;background:#fbfcfe;color:var(--ink)}
+.scout-results{margin-top:14px}
+.scout-results .objective-card{grid-template-columns:1fr auto;align-items:center}
+@media(max-width:900px){.scout-finder-controls{grid-template-columns:1fr}.scout-finder-controls .primary{width:100%}}
 </style>
 </head>
 <body>
@@ -257,16 +266,26 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
     </section>
 
     <section id="transferlab" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">PRE-SIGNING CONTROL</p><h2>Transfer Lab</h2><p>Valora un objectiu abans de fitxar-lo. Analitzar no afecta el Realism Score.</p></div>
-      <div class="panel" style="margin-bottom:16px">
+      <div class="section-toolbar">
+        <div>
+          <p class="eyebrow">PRE-SIGNING CONTROL</p>
+          <h2>Transfer Lab</h2>
+          <p>Valora un objectiu abans de fitxar-lo. Analitzar no afecta el Realism Score.</p>
+        </div>
+        <button class="primary" id="newTargetBtn">+ Analitzar jugador</button>
+      </div>
+
+      <div class="panel scout-finder-panel">
         <div class="panel-head">
           <div><p class="eyebrow">SCOUTING FINDER</p><h2>Trobar candidats realistes</h2></div>
           <span>FC27 DATASET</span>
         </div>
-        <p style="color:var(--muted);font-size:11px;margin:8px 0 16px">Selecciona una posició i et proposem jugadors ordenats per encaix realista amb el Dépor actual.</p>
-        <div style="display:grid;grid-template-columns:minmax(180px,260px) auto;gap:10px;align-items:end">
-          <label style="font-size:10px;color:var(--muted);font-weight:700">Posició
-            <select id="scoutPosition" style="display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid #dfe5ed;border-radius:10px;background:#fbfcfe">
+        <div class="scout-finder-controls">
+          <div>
+            <p class="scout-finder-copy">Selecciona una posició i et proposem jugadors ordenats per encaix realista amb el Dépor actual.</p>
+          </div>
+          <label>Posició
+            <select id="scoutPosition">
               <option value="GK">Porter (GK)</option><option value="RB">Lateral dret (RB)</option><option value="LB">Lateral esquerre (LB)</option>
               <option value="CB">Central (CB)</option><option value="CDM">Migcentre defensiu (CDM)</option><option value="CM">Migcentre (CM)</option>
               <option value="CAM">Mitjapunta (CAM)</option><option value="RM">Extrem dret / RM</option><option value="LM">Extrem esquerre / LM</option>
@@ -275,10 +294,9 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
           </label>
           <button id="findRealisticPlayersBtn" class="primary">Trobar jugadors</button>
         </div>
-        <div id="scoutFinderStatus" class="live-status" style="margin-top:12px"></div>
-        <div id="scoutFinderResults" class="cards-list" style="margin-top:12px"></div>
+        <div id="scoutFinderStatus" class="live-status"></div>
+        <div id="scoutFinderResults" class="cards-list scout-results"></div>
       </div>
-<button class="primary" id="newTargetBtn">+ Analitzar jugador</button></div>
       <div class="lab-shell">
         <div class="lab-hero">
           <article class="lab-search-card">
