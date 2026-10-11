@@ -529,32 +529,89 @@ function matchPoints(m){return resultClass(m)==='win'?3:resultClass(m)==='draw'?
 function positionGroup(pos){const p=(pos||'').toUpperCase();if(/POR|GK/.test(p))return 'GK';if(/DFC|LI|LD|CAD|CAI|CB|LB|RB|DEF/.test(p))return 'DEF';if(/MCD|MC|MCO|MI|MD|CM|CAM|CDM|MID/.test(p))return 'MID';return 'ATT'}
 function seasonChart(){const el=$('#seasonChart');if(!state.matches.length){el.innerHTML='<div class="empty-chart">Registra el primer partit per començar a dibuixar la temporada.</div>';return}const w=620,h=175,pad=8;const pts=state.matches.map((m,i)=>({x:state.matches.length===1?w/2:pad+i*(w-2*pad)/(state.matches.length-1),y:pad+(Math.max(1,Math.min(20,num(m.position)))-1)*(h-2*pad)/19}));const poly=pts.map(p=>`${p.x},${p.y}`).join(' ');const area=`${pts[0].x},${h} ${poly} ${pts[pts.length-1].x},${h}`;el.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1765d8" stop-opacity=".20"/><stop offset="1" stop-color="#1765d8" stop-opacity="0"/></linearGradient></defs><polygon points="${area}" fill="url(#areaFill)"/><polyline points="${poly}" fill="none" stroke="#1765d8" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${pts.map((p,i)=>`<circle cx="${p.x}" cy="${p.y}" r="${i===pts.length-1?5:3}" fill="white" stroke="#1765d8" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`}
 function transferFit(a){
-  let score=100;const reasons=[];const factors=[];
-  const club=num(state.clubStatus)||4.6,level=num(a.playerLevel),origin=num(a.originLevel),fee=num(a.fee),value=num(a.value),wage=num(a.wage),age=num(a.age),contract=num(a.contractYears);
+  let score=100;
+  const reasons=[];
+  const factors=[];
+  const club=num(state.clubStatus)||4.6;
+  const level=num(a.playerLevel);
+  const origin=num(a.originLevel);
+  const fee=num(a.fee);
+  const value=num(a.value);
+  const wage=num(a.wage);
+  const age=num(a.age);
+  const contract=num(a.contractYears);
+  const overall=num(a.overall);
   const topWage=Math.max(0,...state.squad.map(p=>num(p.wage)));
   const operational=Math.max(0,num(state.finance.initialBudget)*.70 + realism().sales*.70);
   const hit=(pts,msg)=>{score-=pts;reasons.push(msg)};
-  if(level){const gap=level-club;if(gap>2)hit(22,"Nivell del jugador molt per sobre de l'estatus actual del club.");else if(gap>1.2)hit(12,'Salt esportiu exigent per al Dépor actual.');else if(gap>.6)hit(5,'Jugador lleugerament per sobre del nostre mercat natural.')}
-  if(origin){const gap=origin-club;if(gap>3&&a.currentRole==='Titular')hit(11,'És titular en un club de dimensió clarament superior.');else if(gap>2&&a.currentRole==='Clau')hit(16,"Jugador clau d'un club molt superior: operació poc probable.");else if(gap>2&&['Rotació','Suplent'].includes(a.currentRole))hit(4,"Ve d'un club superior, però el rol secundari fa l'operació plausible.")}
-  if(a.market==='Altres')hit(4,'Fora dels mercats prioritaris del projecte.');
-  if(a.hiddenPotential==='Sí')hit(15,'La decisió depèn de potencial extern que el club no hauria de conèixer.');
-  if(a.type==='Compra'&&fee){if(operational&&fee>operational)hit(20,'El preu supera el pressupost operatiu realista disponible.');else if(operational&&fee>operational*.70)hit(9,'Una sola operació consumiria més del 70% del pressupost operatiu.');if(value&&fee>value*1.35)hit(5,'Prima de traspàs elevada sobre el valor estimat.')}
-  if(topWage&&wage>topWage*1.10&&a.franchise!=='Sí')hit(14,"El sou trencaria l'escala salarial actual.");else if(topWage&&wage>topWage)hit(4,"Passaria a la part alta de l'escala salarial.");
-  if(age>30)hit(3,'Perfil veterà: només és coherent com a operació molt específica.');
-  if(age<=21&&level>club+1.2&&origin>club+1.5)hit(5,"Talent jove d'alt nivell amb competència de clubs superiors.");
-  if(contract<=1&&contract>=0&&a.currentRole!=='Clau'){score+=4;reasons.push("Contracte curt: augmenta la plausibilitat de l'operació.")}
-  if(a.currentRole==='Suplent'||a.currentRole==='Rotació'){score+=3;reasons.push('Rol actual secundari: pot buscar més protagonisme.')}
+  const boost=(pts,msg)=>{score+=pts;reasons.push(msg)};
+
+  if(level){
+    const gap=level-club;
+    if(gap>2.5)hit(26,"Nivell esportiu molt per sobre de l'estatus actual del Dépor.");
+    else if(gap>1.8)hit(18,"Salt esportiu molt exigent per al projecte actual.");
+    else if(gap>1.1)hit(10,"Jugador clarament per sobre del mercat natural del Dépor.");
+    else if(gap>.6)hit(4,"Jugador lleugerament per sobre del nivell natural del club.");
+  }
+
+  if(overall>=88) hit(24,"Estatus i notorietat de superestrella molt per sobre del projecte actual.");
+  else if(overall>=85) hit(16,"Jugador d'estatus internacional molt superior al del Dépor actual.");
+  else if(overall>=82) hit(8,"Reputació alta per al nivell actual del projecte.");
+
+  if(origin){
+    const gap=origin-club;
+    if(gap>3 && a.currentRole==='Titular') hit(14,"És titular en un club de dimensió clarament superior.");
+    else if(gap>2 && a.currentRole==='Clau') hit(18,"És peça clau d'un club molt superior: operació poc probable.");
+    else if(gap>2 && ['Rotació','Suplent'].includes(a.currentRole)) boost(3,"Ve d'un club superior, però el rol secundari pot facilitar una sortida.");
+  }
+
+  if(overall>=84 && a.expectedRole==='Rotació') hit(14,"El rol previst de rotació no és coherent amb el perfil i estatus del jugador.");
+  if(overall>=84 && a.expectedRole==='Aposta') hit(20,"Un jugador d'aquest estatus no encaixa com a aposta del projecte.");
+  if(overall>=86 && a.expectedRole==='Titular') boost(2,"El rol de titular és coherent amb el nivell del jugador.");
+
+  if(age){
+    if(age<=21 && overall>=80 && origin>club+1.2) hit(8,"Talent jove d'alt nivell amb competència probable de clubs superiors.");
+    else if(age>=35 && overall>=84){
+      boost(4,"Final de carrera: l'edat redueix parcialment la barrera esportiva.");
+      if(a.market==='Iberoamèrica' || a.market==='Espanya' || a.market==='Portugal') boost(2,"Hi ha certa coherència cultural o geogràfica amb el projecte.");
+    } else if(age>30) hit(2,"Perfil veterà: ha de tenir un encaix esportiu i econòmic molt clar.");
+  }
+
+  if(a.market==='Altres') hit(4,"Fora dels mercats prioritaris del projecte.");
+  if(a.hiddenPotential==='Sí') hit(15,"La decisió depèn de potencial extern que el club no hauria de conèixer.");
+
+  if(a.type==='Compra' && fee){
+    if(operational && fee>operational) hit(22,"El preu supera el pressupost operatiu realista disponible.");
+    else if(operational && fee>operational*.70) hit(10,"Una sola operació consumiria més del 70% del pressupost operatiu.");
+    if(value && fee>value*1.35) hit(5,"Prima de traspàs elevada sobre el valor estimat.");
+  }
+
+  if(topWage && wage>topWage*1.10 && a.franchise!=='Sí') hit(16,"El sou trencaria l'escala salarial actual.");
+  else if(topWage && wage>topWage) hit(5,"Passaria a la part alta de l'escala salarial.");
+  if(overall>=84 && !wage) hit(8,"Falta el salari previst: la viabilitat econòmica no es pot validar.");
+  if(a.type==='Compra' && overall>=84 && !fee) hit(6,"Falta el preu previst: no es pot validar l'impacte pressupostari.");
+
+  if(contract>0 && contract<=1 && a.currentRole!=='Clau') boost(4,"Contracte curt: augmenta la plausibilitat de l'operació.");
+  if(a.currentRole==='Suplent' || a.currentRole==='Rotació') boost(3,"Rol actual secundari: pot buscar més protagonisme.");
+
+  const exceptionalContext=a.franchise==='Sí' || /retorn|galícia|galicia|familiar|final de carrera|baixada salarial|renúncia salarial|lliure/i.test(String(a.reason||''));
+  if(overall>=88 && club<5.5 && !exceptionalContext){score=Math.min(score,49);reasons.push("Sense un context excepcional verificable, una superestrella mundial no és una operació creïble per al Dépor actual.");}
+  else if(overall>=85 && club<5.0 && !exceptionalContext){score=Math.min(score,59);}
+
   score=Math.max(0,Math.min(100,Math.round(score)));
   let verdict='Realista',cls='good',recommend='Operació coherent amb el Dépor actual.';
-  if(score<55){verdict='Irreal',cls='bad',recommend='No recomanat. Només tindria sentit si canvia materialment el context.'}
-  else if(score<70){verdict='Dubtós',cls='bad',recommend="Evitaria l'operació salvo una justificació excepcional i verificable."}
-  else if(score<85){verdict='Plausible',cls='warn',recommend='Possible, però necessita una raó clara de mercat o de rol.'}
+  if(score<55){verdict='Irreal';cls='bad';recommend='No recomanat. Només tindria sentit amb un context excepcional, verificable i coherent econòmicament.';}
+  else if(score<70){verdict='Dubtós';cls='bad';recommend="L'operació és difícil de justificar amb el context actual.";}
+  else if(score<85){verdict='Plausible';cls='warn';recommend='Possible, però necessita una raó clara de mercat, rol i viabilitat econòmica.';}
+
   const factor=(name,val,status='good')=>factors.push({name,val,status});
-  factor('Nivell',level?`${level.toFixed(1)} vs club ${club.toFixed(1)}`:'Pendent',level&&level>club+1.2?'bad':level&&level>club+.6?'warn':'good');
-  factor('Club origen',origin?`${origin.toFixed(1)} / 10`:'Pendent',origin&&origin>club+2?'warn':'good');
-  factor('Preu',fee?`€${fee.toFixed(1)}M`:'—',operational&&fee>operational?'bad':operational&&fee>operational*.7?'warn':'good');
-  factor('Sou',wage?`${Math.round(wage).toLocaleString('ca-ES')} €/set.`:'—',topWage&&wage>topWage*1.1?'bad':topWage&&wage>topWage?'warn':'good');
-  return {score,verdict,cls,recommend,reasons:reasons.slice(0,5),factors,operational};
+  factor('Nivell',level?(level.toFixed(1)+' vs club '+club.toFixed(1)):'Pendent',level&&level>club+1.2?'bad':level&&level>club+.6?'warn':'good');
+  factor('Estatus',overall?('OVR '+overall):'Pendent',overall>=85?'bad':overall>=82?'warn':'good');
+  factor('Edat',age?(age+' anys'):'Pendent',age&&age<=21&&overall>=80?'warn':'good');
+  factor('Club origen',origin?(origin.toFixed(1)+' / 10'):'Pendent',origin&&origin>club+2?'warn':'good');
+  factor('Rol previst',a.expectedRole||'Pendent',overall>=84&&a.expectedRole!=='Titular'?'bad':'good');
+  factor('Economia',(fee||wage)?'Parcialment validada':'Pendent',(overall>=84&&(!fee||!wage))?'warn':'good');
+  return {score,verdict,cls,recommend,reasons:reasons.slice(0,6),factors,operational};
 }
 function renderTransferLab(){
   const a=state.latestAssessment;$('#shortlistCount').textContent=`${state.shortlist.length} OBJECTIUS`;
@@ -676,7 +733,7 @@ function targetFields(prefill={}){return [
  {label:'Valor actual €M (opcional)',name:'value',type:'number',step:'.1',value:prefill.value||'',optional:1},
  {label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'}
 ];}
-function analyseTarget(prefill={}){modal('Analitzar objectiu de mercat',targetFields(prefill),d=>{const assessment={...d,analysedAt:new Date().toLocaleDateString('ca-ES')};state.latestAssessment=assessment;const idx=state.shortlist.findIndex(x=>x.player.toLowerCase()===assessment.player.toLowerCase());if(idx>=0)state.shortlist[idx]=assessment;else state.shortlist.unshift(assessment);});}
+function analyseTarget(prefill={}){modal('Analitzar objectiu de mercat',targetFields(prefill),d=>{const assessment={...prefill,...d,analysedAt:new Date().toLocaleDateString('ca-ES')};state.latestAssessment=assessment;const idx=state.shortlist.findIndex(x=>x.player.toLowerCase()===assessment.player.toLowerCase());if(idx>=0)state.shortlist[idx]=assessment;else state.shortlist.unshift(assessment);});}
 window.reviewTarget=i=>{const x=state.shortlist[i];if(x)analyseTarget(x)};
 window.removeTarget=i=>{if(confirm('Eliminar aquest objectiu de la shortlist?')){state.shortlist.splice(i,1);save()}};
 window.signTarget=i=>{const x=state.shortlist[i];if(!x)return;const r=transferFit(x);if(r.score<70&&!confirm(`Fit Score ${r.score}/100 (${r.verdict}). Vols registrar igualment el fitxatge?`))return;state.transfers.push({player:x.player,type:x.type==='Cessió entrada'?'Cessió entrada':x.type==='Agent lliure'?'Agent lliure':'Compra',window:'Estiu',club:x.club,amount:x.fee,playerValue:x.value,wage:x.wage,age:x.age,role:x.expectedRole,market:x.market,context:'Normal',playerLevel:x.playerLevel,hiddenPotential:x.hiddenPotential,franchise:x.franchise,reason:`Transfer Lab ${r.score}/100 · ${r.verdict}${x.reason?' · '+x.reason:''}`});state.shortlist.splice(i,1);save();};
