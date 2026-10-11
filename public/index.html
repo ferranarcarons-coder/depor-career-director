@@ -389,7 +389,7 @@ const RULES_OBJECTIVES_V4='deporCareerDirectorRulesObjectivesV4';
 if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V4,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const RESET_SEASON_FIX='deporCareerDirectorResetSeasonEvolutionV1';
 if(!localStorage.getItem(RESET_SEASON_FIX)){state.matches=[];state.points=0;state.position=base.position;localStorage.setItem(RESET_SEASON_FIX,'1');localStorage.setItem(KEY,JSON.stringify(state));}
-const $=s=>document.querySelector(s); const $=s=>[...document.querySelectorAll(s)];
+const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
 
 let cloudSyncTimer=null;
 let cloudSyncEnabled=false;
