@@ -257,7 +257,28 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
     </section>
 
     <section id="transferlab" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">PRE-SIGNING CONTROL</p><h2>Transfer Lab</h2><p>Valora un objectiu abans de fitxar-lo. Analitzar no afecta el Realism Score.</p></div><button class="primary" id="newTargetBtn">+ Analitzar jugador</button></div>
+      <div class="section-toolbar"><div><p class="eyebrow">PRE-SIGNING CONTROL</p><h2>Transfer Lab</h2><p>Valora un objectiu abans de fitxar-lo. Analitzar no afecta el Realism Score.</p></div>
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-head">
+          <div><p class="eyebrow">SCOUTING FINDER</p><h2>Trobar candidats realistes</h2></div>
+          <span>FC27 DATASET</span>
+        </div>
+        <p style="color:var(--muted);font-size:11px;margin:8px 0 16px">Selecciona una posició i et proposem jugadors ordenats per encaix realista amb el Dépor actual.</p>
+        <div style="display:grid;grid-template-columns:minmax(180px,260px) auto;gap:10px;align-items:end">
+          <label style="font-size:10px;color:var(--muted);font-weight:700">Posició
+            <select id="scoutPosition" style="display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid #dfe5ed;border-radius:10px;background:#fbfcfe">
+              <option value="GK">Porter (GK)</option><option value="RB">Lateral dret (RB)</option><option value="LB">Lateral esquerre (LB)</option>
+              <option value="CB">Central (CB)</option><option value="CDM">Migcentre defensiu (CDM)</option><option value="CM">Migcentre (CM)</option>
+              <option value="CAM">Mitjapunta (CAM)</option><option value="RM">Extrem dret / RM</option><option value="LM">Extrem esquerre / LM</option>
+              <option value="RW">Extrem dret (RW)</option><option value="LW">Extrem esquerre (LW)</option><option value="ST">Davanter (ST)</option>
+            </select>
+          </label>
+          <button id="findRealisticPlayersBtn" class="primary">Trobar jugadors</button>
+        </div>
+        <div id="scoutFinderStatus" class="live-status" style="margin-top:12px"></div>
+        <div id="scoutFinderResults" class="cards-list" style="margin-top:12px"></div>
+      </div>
+<button class="primary" id="newTargetBtn">+ Analitzar jugador</button></div>
       <div class="lab-shell">
         <div class="lab-hero">
           <article class="lab-search-card">
@@ -714,6 +735,35 @@ async function loadLivePlayer(ref){const status=$('#liveSearchStatus'),box=$('#l
   overall:p.overall||'',
   reason:`Dades EA FC27 carregades automàticament · OVR ${p.overall||'—'}${p.age?` · ${p.age} anys`:''}${p.nationality?` · ${p.nationality}`:''}${p.league?` · ${p.league}`:''}. Només completa el context que el joc no publica.`
 });}catch(e){status.textContent='No s’ha pogut carregar la fitxa. Pots completar-la manualment.';status.className='live-status error';analyseTarget({player:ref.name||''});}}
+async function findRealisticPlayers(){
+  const pos=$('#scoutPosition')?.value||'';
+  const status=$('#scoutFinderStatus'),box=$('#scoutFinderResults');
+  if(!pos)return;
+  status.textContent='Analitzant la BBDD FC27…';status.className='live-status';box.innerHTML='';
+  try{
+    const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=12');
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||'Error');
+    const players=data.players||[];
+    status.textContent=players.length?('Top '+players.length+' candidats per '+pos):'No hi ha candidats';
+    status.className='live-status '+(players.length?'ok':'error');
+    box.innerHTML=players.map((p,i)=>{
+      const cls=p.scoutingScore>=85?'good':p.scoutingScore>=70?'warn':p.scoutingScore>=55?'warn':'bad';
+      return '<div class="objective-card"><div><div class="objective-meta"><span class="meta-chip">'+p.position+'</span><span class="meta-chip">'+(p.age?p.age+' anys':'edat —')+'</span><span class="meta-chip">'+p.market+'</span></div><strong>'+p.name+'</strong><p>'+p.club+' · '+p.league+' · OVR '+p.overall+'</p><p style="margin-top:8px">'+(p.reasons||[]).join(' · ')+'</p></div><div style="text-align:right"><span class="review-verdict '+cls+'">'+p.scoutingScore+'/100</span><div style="margin-top:10px"><button class="ghost-btn" data-scout-player="'+i+'">Analitzar</button></div></div></div>';
+    }).join('');
+    box.querySelectorAll('[data-scout-player]').forEach(btn=>btn.onclick=()=>openScoutCandidate(players[Number(btn.dataset.scoutPlayer)]));
+  }catch(e){
+    status.textContent='No s’ha pogut generar la llista de candidats.';status.className='live-status error';
+  }
+}
+async function openScoutCandidate(p){
+  analyseTarget({
+    player:p.name||'',position:p.position||'',age:p.age||'',club:p.club||'',
+    market:p.market||'Altres',playerLevel:p.playerLevel||'',originLevel:p.originLevel||'',
+    overall:p.overall||'',league:p.league||'',nationality:p.nationality||'',
+    reason:'Recomanat pel Scouting Finder · Fit inicial '+(p.scoutingScore||'—')+'/100.'
+  });
+}
 function targetFields(prefill={}){return [
  {label:'Jugador',name:'player',full:1,value:prefill.player||''},
  {label:'Posició',name:'position',value:prefill.position||''},
@@ -737,7 +787,7 @@ function analyseTarget(prefill={}){modal('Analitzar objectiu de mercat',targetFi
 window.reviewTarget=i=>{const x=state.shortlist[i];if(x)analyseTarget(x)};
 window.removeTarget=i=>{if(confirm('Eliminar aquest objectiu de la shortlist?')){state.shortlist.splice(i,1);save()}};
 window.signTarget=i=>{const x=state.shortlist[i];if(!x)return;const r=transferFit(x);if(r.score<70&&!confirm(`Fit Score ${r.score}/100 (${r.verdict}). Vols registrar igualment el fitxatge?`))return;state.transfers.push({player:x.player,type:x.type==='Cessió entrada'?'Cessió entrada':x.type==='Agent lliure'?'Agent lliure':'Compra',window:'Estiu',club:x.club,amount:x.fee,playerValue:x.value,wage:x.wage,age:x.age,role:x.expectedRole,market:x.market,context:'Normal',playerLevel:x.playerLevel,hiddenPotential:x.hiddenPotential,franchise:x.franchise,reason:`Transfer Lab ${r.score}/100 · ${r.verdict}${x.reason?' · '+x.reason:''}`});state.shortlist.splice(i,1);save();};
-$('#newTargetBtn').onclick=()=>analyseTarget();$('#analyseFromSearchBtn').onclick=()=>livePlayerSearch();$('#targetSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();livePlayerSearch();}};
+$('#findRealisticPlayersBtn').onclick=()=>findRealisticPlayers();$('#newTargetBtn').onclick=()=>analyseTarget();$('#analyseFromSearchBtn').onclick=()=>livePlayerSearch();$('#targetSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();livePlayerSearch();}};
 
 $('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',name:'player',full:1},{label:'Tipus',name:'type',type:'select',options:['Compra','Venda','Cessió entrada','Cessió sortida','Agent lliure','Oferta rebutjada']},{label:'Finestra',name:'window',type:'select',options:['Estiu','Hivern']},{label:'Club origen/destí',name:'club'},{label:'Import / oferta €M',name:'amount',type:'number',step:'.1'},{label:'Valor actual jugador €M',name:'playerValue',type:'number',step:'.1',optional:1},{label:'Salari €/set.',name:'wage',type:'number',optional:1},{label:'Edat',name:'age',type:'number',optional:1},{label:'Rol previst / actual',name:'role',type:'select',options:['Rotació','Titular','Aposta','No aplica']},{label:'Mercat',name:'market',type:'select',options:['Espanya','Portugal','Iberoamèrica','Altres','No aplica']},{label:'Context',name:'context',type:'select',options:['Normal','Lesió greu','Venda prèvia','Necessitat crítica','Oportunitat excepcional']},{label:'Nivell jugador (1-10)',name:'playerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Nivell club comprador (1-10)',name:'buyerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Anys de contracte restants',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},{label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'},{label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},{label:'Jugador símbol del projecte?',name:'symbol',type:'select',options:['No','Sí']},{label:'Reality Override?',name:'override',type:'select',options:['No','Sí']},{label:'Justificació / context',name:'reason',full:1}],d=>state.transfers.push(d));
 $('#addObjectiveBtn').onclick=()=>modal('Afegir objectiu',[{label:'Objectiu',name:'name',full:1},{label:'Detall',name:'detail',full:1},{label:'Progrés %',name:'progress',type:'number',min:0,max:100},{label:'Pes %',name:'weight',type:'number',min:0,max:100},{label:'Prioritat',name:'priority',type:'select',options:['Alta','Mitjana','Baixa']},{label:'Revisió',name:'review'}],d=>state.objectives.push({...d,progress:num(d.progress),weight:num(d.weight),status:'active'}));
