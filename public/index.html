@@ -616,12 +616,66 @@ function modal(title,fields,onSave){const dlg=$('#modal'),form=$('#modalForm');$
 $('#addMatchBtn').onclick=()=>modal('Registrar partit',[{label:'Rival',name:'opponent',full:1},{label:'Gols Dépor',name:'gf',type:'number',min:0},{label:'Gols rival',name:'ga',type:'number',min:0},{label:'Posició després del partit',name:'position',type:'number',min:1,max:20}],d=>state.matches.push({...d,gf:num(d.gf),ga:num(d.ga),position:num(d.position)}));
 $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[{label:'Nom',name:'name',full:1},{label:'Posició',name:'pos'},{label:'Edat',name:'age',type:'number'},{label:'Rol',name:'role'},{label:'Valor €M',name:'value',type:'number',step:'.1'},{label:'Sou €/set.',name:'wage',type:'number'},{label:'Contracte fins',name:'contract'},{label:'Minuts',name:'minutes',type:'number'},{label:'Gols',name:'goals',type:'number'},{label:'Assistències',name:'assists',type:'number'}],d=>state.squad.push(d));
 
+function inferMarketFromNationality(nat){
+  const n=String(nat||'').toLowerCase();
+  if(n.includes('spain')||n.includes('españa'))return 'Espanya';
+  if(n.includes('portugal'))return 'Portugal';
+  const ibero=['argentina','uruguay','paraguay','chile','peru','perú','bolivia','ecuador','colombia','venezuela','mexico','méxico','costa rica','panama','panamá','guatemala','honduras','el salvador','nicaragua','dominican','república dominicana','cuba','brazil','brasil'];
+  if(ibero.some(x=>n.includes(x)))return 'Iberoamèrica';
+  return 'Altres';
+}
+function inferOriginLevel(club,league,ovr){
+  const l=String(league||'').toLowerCase();
+  const c=String(club||'').toLowerCase();
+  let v=5.0;
+  if(/champions|premier league|laliga|serie a|bundesliga|ligue 1/.test(l))v=7.0;
+  else if(/liga portugal|eredivisie/.test(l))v=6.2;
+  else if(/mls|major league soccer|saudi/.test(l))v=5.8;
+  else if(/segunda|laliga hypermotion|championship|serie b|2\. bundesliga/.test(l))v=4.8;
+  const elite=['real madrid','barcelona','manchester city','liverpool','arsenal','bayern','paris saint','psg','inter milan','juventus','atlético','atletico'];
+  if(elite.some(x=>c.includes(x)))v=Math.max(v,8.5);
+  if(Number(ovr)>=86)v=Math.max(v,6.5);
+  return Number(v.toFixed(1));
+}
+
 function overallToLevel(ovr){const n=Number(ovr||0);if(!n)return '';if(n>=90)return 9.5;if(n>=87)return 8.8;if(n>=84)return 8.0;if(n>=81)return 7.2;if(n>=78)return 6.4;if(n>=75)return 5.6;if(n>=72)return 4.9;if(n>=69)return 4.2;return 3.6;}
 function contractYearsFromText(txt){if(!txt)return '';const years=[...String(txt).matchAll(/20\\d{2}/g)].map(m=>Number(m[0]));if(!years.length)return '';const end=Math.max(...years);return Math.max(0,Math.min(6,end-2026));}
 async function livePlayerSearch(){const input=$('#targetSearch'),status=$('#liveSearchStatus'),box=$('#liveSearchResults');const q=(input?.value||'').trim();box.innerHTML='';if(q.length<2){status.textContent='Escriu almenys 2 caràcters.';status.className='live-status error';return;}status.textContent='Consultant la base de dades FC27…';status.className='live-status';try{const r=await fetch(`/api/players/search?q=${encodeURIComponent(q)}`);const data=await r.json();if(!r.ok)throw new Error(data.error||'Error de cerca');const players=data.players||[];if(!players.length){status.textContent='No s’han trobat coincidències. Pots analitzar-lo manualment.';status.className='live-status error';return;}status.textContent=`${players.length} coincidències trobades`;status.className='live-status ok';box.innerHTML=players.slice(0,8).map((p,i)=>`<button type="button" class="live-player-result" data-live-player="${i}"><div><strong>${p.name}</strong><span>FC27 · Fitxa disponible</span></div><small>CARREGAR</small></button>`).join('');box.querySelectorAll('[data-live-player]').forEach(btn=>btn.onclick=()=>loadLivePlayer(players[Number(btn.dataset.livePlayer)]));}catch(e){status.textContent='La cerca automàtica no està disponible ara mateix. Obrint mode manual.';status.className='live-status error';analyseTarget({player:q});}}
-async function loadLivePlayer(ref){const status=$('#liveSearchStatus'),box=$('#liveSearchResults');status.textContent='Carregant dades del jugador…';status.className='live-status';try{const params=new URLSearchParams({id:ref.id||'',slug:ref.slug||'',url:ref.url||'',name:ref.name||''});const r=await fetch(`/api/players/detail?${params}`);const data=await r.json();if(!r.ok)throw new Error(data.error||'Error de detall');const p=data.player||{};status.textContent='Dades carregades. Revisa el context abans de calcular el Fit Score.';status.className='live-status ok';box.innerHTML='';analyseTarget({player:p.name||ref.name,position:p.position||'',age:p.age||'',club:p.club||'',value:p.value?Number(p.value/1e6).toFixed(1):'',wage:p.wage||'',playerLevel:overallToLevel(p.overall),contractYears:contractYearsFromText(p.contract),reason:`Dades FC27 carregades automàticament${p.overall?` · OVR ${p.overall}`:''}${p.potential?` · POT ${p.potential}`:''}${p.nationality?` · ${p.nationality}`:''}. Revisa el context real de l’operació abans de decidir.`});}catch(e){status.textContent='No s’ha pogut carregar la fitxa. Pots completar-la manualment.';status.className='live-status error';analyseTarget({player:ref.name||''});}}
+async function loadLivePlayer(ref){const status=$('#liveSearchStatus'),box=$('#liveSearchResults');status.textContent='Carregant dades del jugador…';status.className='live-status';try{const params=new URLSearchParams({id:ref.id||'',slug:ref.slug||'',url:ref.url||'',name:ref.name||''});const r=await fetch(`/api/players/detail?${params}`);const data=await r.json();if(!r.ok)throw new Error(data.error||'Error de detall');const p=data.player||{};status.textContent='Dades carregades. Revisa el context abans de calcular el Fit Score.';status.className='live-status ok';box.innerHTML='';analyseTarget({
+  player:p.name||ref.name,
+  position:p.position||'',
+  age:p.age||'',
+  club:p.club||'',
+  market:inferMarketFromNationality(p.nationality),
+  value:p.value?Number(p.value/1e6).toFixed(1):'',
+  wage:p.wage||'',
+  playerLevel:overallToLevel(p.overall),
+  originLevel:inferOriginLevel(p.club,p.league,p.overall),
+  contractYears:contractYearsFromText(p.contract),
+  nationality:p.nationality||'',
+  league:p.league||'',
+  overall:p.overall||'',
+  reason:`Dades EA FC27 carregades automàticament · OVR ${p.overall||'—'}${p.age?` · ${p.age} anys`:''}${p.nationality?` · ${p.nationality}`:''}${p.league?` · ${p.league}`:''}. Només completa el context que el joc no publica.`
+});}catch(e){status.textContent='No s’ha pogut carregar la fitxa. Pots completar-la manualment.';status.className='live-status error';analyseTarget({player:ref.name||''});}}
 function targetFields(prefill={}){return [
- {label:'Jugador',name:'player',full:1,value:prefill.player||''},{label:'Posició',name:'position',value:prefill.position||''},{label:'Edat',name:'age',type:'number',value:prefill.age||''},{label:'Club actual',name:'club',value:prefill.club||''},{label:'Tipus operació',name:'type',type:'select',options:['Compra','Cessió entrada','Agent lliure'],value:prefill.type||'Compra'},{label:'Rol actual',name:'currentRole',type:'select',options:['Clau','Titular','Rotació','Suplent'],value:prefill.currentRole||'Titular'},{label:'Rol previst al Dépor',name:'expectedRole',type:'select',options:['Titular','Rotació','Aposta'],value:prefill.expectedRole||'Rotació'},{label:'Mercat',name:'market',type:'select',options:['Espanya','Portugal','Iberoamèrica','Altres'],value:prefill.market||'Espanya'},{label:'Preu previst €M',name:'fee',type:'number',step:'.1',optional:1},{label:'Valor actual €M',name:'value',type:'number',step:'.1',optional:1},{label:'Sou previst €/set.',name:'wage',type:'number',optional:1},{label:'Nivell jugador (1-10)',name:'playerLevel',type:'number',min:1,max:10,step:'.1'},{label:'Nivell club origen (1-10)',name:'originLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Anys contracte restants',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},{label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'},{label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},{label:'Context / per què podria venir?',name:'reason',type:'textarea',full:1,placeholder:'Ex.: busca minuts, club venedor, final de contracte...',value:prefill.reason||''}];}
+ {label:'Jugador',name:'player',full:1,value:prefill.player||''},
+ {label:'Posició',name:'position',value:prefill.position||''},
+ {label:'Edat',name:'age',type:'number',value:prefill.age||'',optional:1},
+ {label:'Club actual',name:'club',value:prefill.club||''},
+ {label:'Tipus operació',name:'type',type:'select',options:['Compra','Cessió entrada','Agent lliure'],value:prefill.type||'Compra'},
+ {label:'Rol actual',name:'currentRole',type:'select',options:['Clau','Titular','Rotació','Suplent'],value:prefill.currentRole||'Titular'},
+ {label:'Rol previst al Dépor',name:'expectedRole',type:'select',options:['Titular','Rotació','Aposta'],value:prefill.expectedRole||'Rotació'},
+ {label:'Mercat',name:'market',type:'select',options:['Espanya','Portugal','Iberoamèrica','Altres'],value:prefill.market||'Altres'},
+ {label:'Preu previst €M (si el saps)',name:'fee',type:'number',step:'.1',optional:1},
+ {label:'Sou previst €/set. (si el saps)',name:'wage',type:'number',optional:1},
+ {label:'Anys contracte restants (si el saps)',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},
+ {label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},
+ {label:'Context / per què podria venir?',name:'reason',type:'textarea',full:1,placeholder:'Opcional: busca minuts, club venedor, final de contracte...',value:prefill.reason||'',optional:1},
+ {label:'Nivell jugador (auto)',name:'playerLevel',type:'number',min:1,max:10,step:'.1',value:prefill.playerLevel||'',optional:1},
+ {label:'Nivell club origen (auto)',name:'originLevel',type:'number',min:1,max:10,step:'.1',value:prefill.originLevel||'',optional:1},
+ {label:'Valor actual €M (opcional)',name:'value',type:'number',step:'.1',value:prefill.value||'',optional:1},
+ {label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'}
+];}
 function analyseTarget(prefill={}){modal('Analitzar objectiu de mercat',targetFields(prefill),d=>{const assessment={...d,analysedAt:new Date().toLocaleDateString('ca-ES')};state.latestAssessment=assessment;const idx=state.shortlist.findIndex(x=>x.player.toLowerCase()===assessment.player.toLowerCase());if(idx>=0)state.shortlist[idx]=assessment;else state.shortlist.unshift(assessment);});}
 window.reviewTarget=i=>{const x=state.shortlist[i];if(x)analyseTarget(x)};
 window.removeTarget=i=>{if(confirm('Eliminar aquest objectiu de la shortlist?')){state.shortlist.splice(i,1);save()}};
