@@ -638,6 +638,36 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/finance/budget' && req.method === 'POST') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      const initialBudget=Number(String(body?.initialBudget ?? '').replace(',','.'));
+      if(!Number.isFinite(initialBudget) || initialBudget<=0) return json(res,400,{error:'Pressupost inicial no vàlid.'});
+
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
+      stateData.finance={...(stateData.finance||{}),initialBudget};
+
+      await pool.query('BEGIN');
+      try{
+        await pool.query(
+          'INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',
+          ['main',JSON.stringify(stateData)]
+        );
+        await pool.query(
+          `INSERT INTO career_state(id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          ['main',JSON.stringify(stateData)]
+        );
+        await pool.query('COMMIT');
+      }catch(e){
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+      return json(res,200,{ok:true,initialBudget,openingOperational:initialBudget*.70});
+    }
+
     if (u.pathname === '/api/state' && req.method === 'GET') {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const r = await pool.query('SELECT data, updated_at FROM career_state WHERE id = $1', ['main']);
