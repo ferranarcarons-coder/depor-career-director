@@ -946,7 +946,7 @@ function normalizeDirectorText(s){return String(s||'').toLowerCase().normalize('
 function findSquadPlayerFromText(text){const t=normalizeDirectorText(text);let best=null,bestScore=0;for(const p of state.squad){const n=normalizeDirectorText(p.name);if(n&&t.includes(n))return p;const tokens=n.split(/\s+/).filter(x=>x.length>=4);const score=tokens.filter(x=>t.includes(x)).length;if(score>bestScore){best=p;bestScore=score}}return bestScore?best:null}
 function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return state.squad.filter(x=>String(x.pos||'').toUpperCase()===pos).length}
 function extractOfferAmount(text){const s=String(text||'').replace(',','.');const m=s.match(/(\d+(?:\.\d+)?)\s*(?:m€|m eur|millones|milions|m\b)/i);return m?Number(m[1]):0}
-function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('titular')||role.includes('clau')||role.includes('clave'))pts+=20;if(role.includes('rot')||role.includes('supl'))pts-=10;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
+function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('clave')||role.includes('clau'))pts+=22;else if(role.includes('importante')||role.includes('titular'))pts+=14;else if(role.includes('rotacion')||role.includes('rot')||role.includes('supl'))pts-=4;else if(role.includes('ocasional'))pts-=12;else if(role.includes('promesa'))pts-=6;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
 function outgoingAdvice(p,mode,offer=0){
  const importance=playerImportance(p),age=num(p.age),mins=num(p.minutes),delta=ovrDelta(p),value=num(p.value),depth=squadDepthFor(p);
  if(mode==='loan'){
@@ -1242,9 +1242,9 @@ window.editSquadPlayer=i=>{
   const p=state.squad[i];if(!p)return;
   modal('Editar fitxa · '+p.name,[
     {label:'Nom',name:'name',full:1,value:p.name},
-    {label:'Posició',name:'pos',value:p.pos||''},
+    {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC'],value:p.pos||'POR'},
     {label:'Edat',name:'age',type:'number',value:p.age||''},
-    {label:'Rol',name:'role',value:p.role||''},
+    {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:p.role||'Rotación'},
     {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor','Cedit fora'],value:p.ownership||'Propietat'},
     {label:'Club propietari (si és cessió entrant)',name:'parentClub',value:p.parentClub||'',optional:1},
     {label:'Club destí (si està cedit fora)',name:'destinationClub',value:p.destinationClub||'',optional:1},
@@ -1298,9 +1298,9 @@ $('#addMatchBtn').onclick=()=>modal('Registrar partit',[{label:'Rival',name:'opp
 $('#batchOvrBtn').onclick=()=>batchOvrUpdate();
 $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[
  {label:'Nom',name:'name',full:1},
- {label:'Posició',name:'pos'},
+ {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC']},
  {label:'Edat',name:'age',type:'number'},
- {label:'Rol',name:'role'},
+ {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:'Rotación'},
  {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor','Cedit fora'],value:'Propietat'},
  {label:'Club propietari (si és cessió entrant)',name:'parentClub',optional:1},
  {label:'Club destí (si està cedit fora)',name:'destinationClub',optional:1},
