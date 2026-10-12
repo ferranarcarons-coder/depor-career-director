@@ -608,17 +608,31 @@ async function serveIndex(res) {
     finance.initialBudget = 11.613983;
     finance.budgetSource = 'EA available transfer budget after staff changes';
 
+    const normLoanNameSSR=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const loanPresetSSR=(p)=>{
+      const n=normLoanNameSSR(p?.name||'');
+      const own=p?.ownership||'Propietat';
+      const presets=[
+        {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Dépor',deporShare:30},
+        {keys:['marc casado'],ownership:'Cedit al Dépor',deporShare:50},
+        {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Dépor',deporShare:60},
+        {keys:['charlie patino'],ownership:'Cedit fora',deporShare:25}
+      ];
+      return presets.find(x=>x.ownership===own&&x.keys.includes(n))||null;
+    };
+    const effectiveLoanShareSSR=(p)=>{
+      const own=p?.ownership||'Propietat';
+      if(own==='Propietat')return 100;
+      if(p?.wageShareManual===true)return Math.max(0,Math.min(100,Number(p?.wageShareDepor||0)));
+      const preset=loanPresetSSR(p); if(preset)return preset.deporShare;
+      const stored=Number(p?.wageShareDepor||0);
+      if(stored>0)return Math.max(0,Math.min(100,stored));
+      return own==='Cedit al Dépor'?100:0;
+    };
     const wageContribution = (p) => {
       const wage = Number(p?.wage || 0);
       if (!wage) return 0;
-      const own = p?.ownership || 'Propietat';
-      if (own === 'Propietat') return wage;
-      const shareRaw = Number(p?.wageShareDepor || 0);
-      const share = Number.isFinite(shareRaw)
-        ? Math.max(0, Math.min(100, shareRaw))
-        : (own === 'Cedit al Dépor' ? 100 : 0);
-      if (own === 'Cedit al Dépor' && shareRaw <= 0) return wage;
-      return wage * (share / 100);
+      return wage*(effectiveLoanShareSSR(p)/100);
     };
 
     const currentWages = dedicatedSquad.reduce((sum,p)=>sum+wageContribution(p),0);
@@ -772,15 +786,34 @@ const server = http.createServer(async (req, res) => {
       const stateData=stateRow.rows[0]?.data||{};
       const squad=await readDedicatedSquad();
       const finance={...(stateData.finance||{})};
+      const normLoanName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+      const loanPreset=(p)=>{
+        const n=normLoanName(p?.name||'');
+        const own=p?.ownership||'Propietat';
+        const presets=[
+          {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Dépor',deporShare:30},
+          {keys:['marc casado'],ownership:'Cedit al Dépor',deporShare:50},
+          {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Dépor',deporShare:60},
+          {keys:['charlie patino','charlie patino'],ownership:'Cedit fora',deporShare:25}
+        ];
+        return presets.find(x=>x.ownership===own&&x.keys.includes(n))||null;
+      };
+      const effectiveLoanShare=(p)=>{
+        const own=p?.ownership||'Propietat';
+        if(own==='Propietat')return 100;
+        if(p?.wageShareManual===true){
+          return Math.max(0,Math.min(100,Number(p?.wageShareDepor||0)));
+        }
+        const preset=loanPreset(p);
+        if(preset)return preset.deporShare;
+        const stored=Number(p?.wageShareDepor||0);
+        if(stored>0)return Math.max(0,Math.min(100,stored));
+        return own==='Cedit al Dépor'?100:0;
+      };
       const wageContribution=(p)=>{
         const wage=Number(p?.wage||0);
         if(!wage)return 0;
-        const own=p?.ownership||'Propietat';
-        if(own==='Propietat')return wage;
-        const shareRaw=Number(p?.wageShareDepor||0);
-        if(own==='Cedit al Dépor' && shareRaw<=0)return wage;
-        const share=Math.max(0,Math.min(100,Number.isFinite(shareRaw)?shareRaw:0));
-        return wage*(share/100);
+        return wage*(effectiveLoanShare(p)/100);
       };
       const currentWages=squad.reduce((a,p)=>a+wageContribution(p),0);
       const baseline=finance.initialWageByPlayer&&typeof finance.initialWageByPlayer==='object'?finance.initialWageByPlayer:{};
@@ -796,7 +829,8 @@ const server = http.createServer(async (req, res) => {
       const ownedWages=squad.filter(p=>(p.ownership||'Propietat')==='Propietat').reduce((a,p)=>a+wageContribution(p),0);
       const incomingLoanWages=squad.filter(p=>p.ownership==='Cedit al Dépor').reduce((a,p)=>a+wageContribution(p),0);
       const outgoingLoanWages=squad.filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+wageContribution(p),0);
-      return json(res,200,{initialBudget,available,transferSpend,transferIncome,reinvestableIncome:transferIncome*.70,initialWages,currentWages,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,squadCount:squad.length},'no-store');
+      const loanShares=squad.filter(p=>['Cedit al Dépor','Cedit fora'].includes(p.ownership)).map(p=>({name:p.name,ownership:p.ownership,share:effectiveLoanShare(p),wage:Number(p.wage||0),cost:wageContribution(p)}));
+      return json(res,200,{initialBudget,available,transferSpend,transferIncome,reinvestableIncome:transferIncome*.70,initialWages,currentWages,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,squadCount:squad.length,loanShares},'no-store');
     }
 
     if (u.pathname === '/api/finance/budget' && req.method === 'POST') {
