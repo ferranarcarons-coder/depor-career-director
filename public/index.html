@@ -478,7 +478,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
         <label class="full">Jugador de la plantilla<select name="playerId" id="salePlayerSelect" required></select></label>
         <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
         <label>Club comprador<input name="club"></label>
-        <label>Import venda €M<input name="amount" type="number" step="0.1" min="0" required></label>
+        <label>Import venda <small style="display:block;color:#8b98a8;font-weight:500">Pots escriure 0,75 (M€) o 750000 (€)</small><input name="amount" type="text" inputmode="decimal" placeholder="0,75" required></label>
         <label>Club comprador (1-10)<input name="buyerLevel" type="number" min="1" max="10" step="0.1"></label>
         <label>Anys contracte restants<input name="contractYears" type="number" min="0" max="6" step="0.5"></label>
         <label class="full">Motiu / context<input name="reason"></label>
@@ -1329,6 +1329,19 @@ function directorMinutesAdvice(p){
   else if(mins>=1200)advice='Ja té participació útil; no prendria una decisió dràstica només pels minuts.';
   return {label:'GESTIÓ DE MINUTS',cls:mins<500?'warn':'good',text:p.name+': '+mins+' minuts registrats · importància '+imp+'/100. '+advice};
 }
+function directorGeneralPlayerAdvice(p){
+  const imp=playerImportance(p),contract=num(p.contractYears),age=num(p.age),mins=num(p.minutes),value=num(p.value);
+  const starter=lineupStarterIdSet().has(p.playerId),bench=lineupBenchIdSet().has(p.playerId);
+  const depth=squadDepthFor(p);
+  let label='MANTENIR',cls='good',action='El mantindria a la plantilla.';
+  const why=[];
+  if(contract>0&&contract<=1&&imp<50){label='VENDA / NO RENOVAR A QUALSEVOL PREU';cls='warn';action='Intentaria una renovació només si és econòmicament controlada; si no, buscaria venda.';why.push('contracte curt');why.push('importància '+imp+'/100');}
+  else if(age<=22&&mins<500&&depth>=3){label='CESSIÓ';cls='warn';action='El cediria perquè necessita minuts reals i tenim cobertura.';why.push('jove amb pocs minuts');}
+  else if(!starter&&!bench&&imp<45){label='ESCOLTAR OFERTES';cls='warn';action='No és una peça estructural avui; escoltaria ofertes sense regalar-lo.';why.push('fora de la rotació principal');}
+  else if(starter||imp>=65){label='MANTENIR / PROTEGIR';cls='good';action='És una peça del projecte; prioritzaria continuïtat i contracte abans que monetitzar.';why.push(starter?'titular':'importància '+imp+'/100');}
+  else {why.push('situació intermèdia sense urgència');}
+  return {label,cls,text:action+' '+p.name+': OVR '+playerCareerOvr(p)+' · '+age+' anys · '+mins+' min · '+(contract||'—')+' any(s) de contracte'+(value?' · valor '+valueMDisplay(value)+' M€':'')+'. '+why.join(' · ')+'.'};
+}
 function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return activeSquad().filter(x=>String(x.pos||'').toUpperCase()===pos).length}
 function extractOfferAmount(text){const s=String(text||'').replace(',','.');const m=s.match(/(\d+(?:\.\d+)?)\s*(?:m€|m eur|millones|milions|m\b)/i);return m?Number(m[1]):0}
 function parseRenewalMoney(text){
@@ -1348,26 +1361,58 @@ function parseRenewalMoney(text){
 function renewalAdvice(p,text){
   const terms=parseRenewalMoney(text);
   const currentWage=num(p.wage),w=wageContext(),top=w.top||0;
-  const importance=playerImportance(p),contract=num(p.contractYears),age=num(p.age);
+  const importance=playerImportance(p),contract=num(p.contractYears),age=num(p.age),value=num(p.value);
   const requested=terms.wage,bonus=terms.bonus;
   const wageRise=currentWage>0&&requested>0?(requested-currentWage)/currentWage:null;
   const hierarchy=requested>0&&top>0?requested/top:null;
   const bonusVsAnnual=requested>0&&bonus>0?bonus/(requested*52):null;
-  let accept=true,negotiate=false,reasons=[];
-  if(importance<50){accept=false;negotiate=true;reasons.push('el seu pes esportiu actual és baix ('+importance+'/100)');}
-  if(wageRise!==null&&wageRise>.20){accept=false;negotiate=true;reasons.push('la pujada salarial és del '+(wageRise*100).toFixed(0)+'%');}
-  if(hierarchy!==null&&hierarchy>1.10){accept=false;negotiate=false;reasons.push('trencaria la jerarquia salarial');}
-  if(age>=30&&contract>1){accept=false;negotiate=true;reasons.push('edat i durada exigeixen prudència');}
-  let label='RENOVARIA',cls='good',decision='Acceptaria la renovació.';
-  if(!accept&&negotiate){label='NEGOCIARIA, NO ACCEPTARIA ARA';cls='warn';decision='No acceptaria aquestes condicions. Faria una contraproposta i, si no baixa, prepararia una alternativa de mercat.';}
-  if(!accept&&!negotiate){label='NO ACCEPTARIA';cls='bad';decision='No acceptaria aquestes condicions.';}
-  const bits=[];
-  bits.push(decision);
-  if(requested&&currentWage)bits.push('Passar de '+currentWage.toLocaleString('ca-ES')+' a '+requested.toLocaleString('ca-ES')+' €/set. és '+(wageRise>=0?'+':'')+(wageRise*100).toFixed(1)+'%.');
-  if(bonus)bits.push('La prima de '+bonus.toLocaleString('ca-ES')+' € '+(bonusVsAnnual!==null?'equival a un '+(bonusVsAnnual*100).toFixed(0)+'% del salari anual proposat.':'és rellevant.'));
-  bits.push('Li queda '+(contract||'—')+' any(s) de contracte i té una importància interna de '+importance+'/100.');
-  if(reasons.length)bits.push('El que em preocupa és: '+reasons.join(' · ')+'.');
-  if(contract<=1&&importance<55)bits.push('Si no accepta una contraproposta raonable, jo sí que obriria la porta a vendre’l aquest estiu per no perdre valor.');
+  const lowImportance=importance<45, mediumImportance=importance>=45&&importance<65, keyPlayer=importance>=65;
+  const maxRise=lowImportance?.08:mediumImportance?.15:.25;
+  const sportingCeiling=currentWage>0?Math.round((currentWage*(1+maxRise))/100)*100:0;
+  const hierarchyCeiling=top>0?Math.floor((top*1.10)/100)*100:0;
+  const ceiling=sportingCeiling&&hierarchyCeiling?Math.min(sportingCeiling,hierarchyCeiling):(sportingCeiling||hierarchyCeiling);
+  const maxBonus=ceiling?Math.round((ceiling*6)/1000)*1000:0;
+
+  let label='RENOVARIA',cls='good';
+  let decision='Acceptaria si les condicions es mantenen dins la jerarquia de la plantilla.';
+  const reasons=[];
+
+  if(lowImportance&&contract<=1){
+    label='ÚLTIMA CONTRAPROPOSTA · SI NO, VENDA';
+    cls='warn';
+    decision='No perseguiria la renovació. Faria una única contraproposta amb un sostre clar; si no l’accepta, activaria la venda mentre encara podem capturar valor.';
+    reasons.push('pes esportiu baix ('+importance+'/100)');
+    reasons.push('només '+(contract||1)+' any de contracte');
+  }else if(wageRise!==null&&wageRise>.25&&!keyPlayer){
+    label='NEGOCIAR A LA BAIXA';
+    cls='warn';
+    decision='No acceptaria aquesta proposta. El salt salarial és massa alt per al seu pes actual i negociaria a la baixa.';
+    reasons.push('pujada del '+(wageRise*100).toFixed(0)+'%');
+  }else if(hierarchy!==null&&hierarchy>1.10){
+    label='NO ACCEPTAR · TRENCA ESCALA';
+    cls='bad';
+    decision='No acceptaria aquestes condicions perquè creen un precedent salarial que no compensa esportivament.';
+    reasons.push('supera el 110% del top salarial');
+  }else if(age>=30&&contract>1&&!keyPlayer){
+    label='RENOVACIÓ CURTA I CONTROLADA';
+    cls='warn';
+    decision='Només renovaria amb durada curta i sense inflar el fix.';
+    reasons.push('edat '+age+' anys');
+  }else if(keyPlayer&&contract<=1){
+    label='PRIORITAT RENOVAR';
+    cls='good';
+    decision='És una renovació prioritària, però sense regalar la negociació: protegiria el jugador i alhora l’escala salarial.';
+  }
+
+  const bits=[decision];
+  if(requested&&currentWage)bits.push('Demana '+requested.toLocaleString('ca-ES')+' €/set. davant dels '+currentWage.toLocaleString('ca-ES')+' actuals ('+(wageRise>=0?'+':'')+(wageRise*100).toFixed(1)+'%).');
+  if(bonus)bits.push('Prima: '+bonus.toLocaleString('ca-ES')+' €'+(bonusVsAnnual!==null?' ('+(bonusVsAnnual*100).toFixed(0)+'% del salari anual proposat)':'')+'.');
+  bits.push('Context esportiu: importància '+importance+'/100 · '+(contract||'—')+' any(s) de contracte'+(value?' · valor '+valueMDisplay(value)+' M€':'')+'.');
+  if(ceiling&&requested){
+    bits.push('La meva línia vermella seria aproximadament '+ceiling.toLocaleString('ca-ES')+' €/set.'+(maxBonus?' i una prima màxima al voltant de '+maxBonus.toLocaleString('ca-ES')+' €':'')+'.');
+  }
+  if(reasons.length)bits.push('Motiu: '+reasons.join(' · ')+'.');
+  if(lowImportance&&contract<=1)bits.push('No faria dues o tres rondes de concessions: una oferta final i decisió ràpida.');
   return {label,cls,text:bits.join(' ')};
 }
 function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('clave')||role.includes('clau'))pts+=22;else if(role.includes('importante')||role.includes('titular'))pts+=14;else if(role.includes('rotacion')||role.includes('rot')||role.includes('supl'))pts-=4;else if(role.includes('ocasional'))pts-=12;else if(role.includes('promesa'))pts-=6;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
@@ -1790,7 +1835,7 @@ async function directorReply(text){
  if((t.includes('a qui')||t.includes('quien'))&&(t.includes('vendre')||t.includes('vender')||t.includes('venda')||t.includes('venta')))return squadSellCandidates('sell');
  if(t.includes('intocable')||t.includes('no tocaria vendre')){const list=[...state.squad].sort((a,b)=>playerImportance(b)-playerImportance(a)).slice(0,5);return {label:'INTOCABLES ACTUALS',cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · Importància '+playerImportance(p)+'/100 · OVR '+playerCareerOvr(p)).join('<br>')}}
  if(intent==='sign')return directorSigningAdvice(text);
- if(player)return {label:'DECISIÓ SOBRE '+player.name.toUpperCase(),cls:'warn',text:'Tinc el jugador identificat i també el context recent. Digues-me què vols decidir exactament: renovació, venda, cessió, rol o minuts.'};
+ if(player)return directorGeneralPlayerAdvice(player);
  return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Puc ajudar-te amb renovacions, vendes, cessions, fitxatges, rols, minuts, jerarquia salarial, contractes i necessitats de plantilla. Si és una continuació del tema anterior, no cal que repeteixis el jugador.'};
 }
 async function sendDirectorChat(textOverride){const input=$('#directorChatInput');const text=String(textOverride||input?.value||'').trim();if(!text)return;state.directorChat=state.directorChat||[];state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});if(input)input.value='';renderTransferLab();state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Analitzant el context…'});renderTransferLab();const i=state.directorChat.length-1;try{const a=await directorReply(text);state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text}}catch(e){state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'}}save()}
@@ -2330,6 +2375,18 @@ setTimeout(()=>cloudLoad(),50);
     const b=document.getElementById(id);if(!b)return;
     b.disabled=busy;b.textContent=busy?'Guardant…':label;
   }
+  function parseAmountM(raw){
+    let s=String(raw??'').trim().toLowerCase().replace(/€/g,'').replace(/\s+/g,'');
+    if(!s)return NaN;
+    if(s.endsWith('k')){const v=Number(s.slice(0,-1).replace(',','.'));return Number.isFinite(v)?v/1000:NaN;}
+    if(s.endsWith('m'))s=s.slice(0,-1);
+    if(/^\d{1,3}(\.\d{3})+$/.test(s)){const euros=Number(s.replace(/\./g,''));return euros/1000000;}
+    if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');
+    else if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'').replace(',','.');
+    const v=Number(s);
+    if(!Number.isFinite(v)||v<0)return NaN;
+    return v>=100000?v/1000000:v;
+  }
   async function loadSquadSelect(id){
     const sel=document.getElementById(id);if(!sel)return;
     sel.innerHTML='<option value="">Carregant plantilla…</option>';
@@ -2368,13 +2425,22 @@ setTimeout(()=>cloudLoad(),50);
     saleForm.addEventListener('submit',async function(e){
       e.preventDefault();if(!saleForm.reportValidity())return;
       const data=Object.fromEntries(new FormData(saleForm).entries());
-      ['amount','buyerLevel','contractYears'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      data.amount=parseAmountM(data.amount);
+      ['buyerLevel','contractYears'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      if(!Number.isFinite(data.amount)||data.amount<0){if(status){status.className='sync-banner warn';status.textContent='Import no vàlid. Exemple: 0,75 o 750000 €.';}return;}
       if(!confirm('Confirmes la venda? El jugador s’eliminarà automàticament de la plantilla.'))return;
       setBusy('saveSale',true,'Confirmar venda');
       try{
-        await api('/api/transfers/sale',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        const out=await api('/api/transfers/sale',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        if(out?.sale){
+          state.transfers=Array.isArray(state.transfers)?state.transfers:[];
+          if(!state.transfers.some(t=>t.operationId&&t.operationId===out.sale.operationId))state.transfers.push(out.sale);
+          state.squad=(state.squad||[]).filter(p=>p.playerId!==out.removedPlayerId);
+          state._clientUpdatedAt=Date.now();
+          try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+        }
         if(status){status.className='sync-banner ok';status.textContent='Venda registrada i jugador eliminat de la plantilla.';}
-        saleDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),200);
+        saleDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),350);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('saveSale',false,'Confirmar venda');
