@@ -504,6 +504,28 @@ async function searchPlayers(q) {
   return [];
 }
 
+function escHtml(v='') {
+  return String(v??'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+function n(v){const x=Number(v||0);return Number.isFinite(x)?x:0}
+function serverPlayerRow(p,i){
+  const own=p.ownership||'Propietat';
+  const base=n(p.baseOvr||p.ovr||p.currentOvr);
+  const cur=n(p.currentOvr||p.ovr||p.baseOvr);
+  const delta=cur&&base?cur-base:0;
+  const value=n(p.value);
+  const wage=n(p.wage)/1000;
+  const duration=own==='Cedit al Dépor'
+    ? (n(p.loanYears)?n(p.loanYears)+' anys':'Pendent')
+    : (n(p.contractYears)?n(p.contractYears)+' anys':'Pendent');
+  const link=own==='Cedit al Dépor'?'CESSIÓ ENTRANT':'PROPI';
+  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.role||'—')+'</td><td>'+escHtml(link)+'</td><td>'+escHtml(duration)+'</td><td>'+(base||'—')+'</td><td><strong>'+(cur||'—')+'</strong></td><td>'+(delta>0?'+':'')+delta+'</td><td>'+escHtml(p.ovrUpdatedAt||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+(own==='Cedit al Dépor'?'—':escHtml(duration))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button></td></tr>';
+}
+function serverLoanRow(p,i){
+  const cur=n(p.currentOvr||p.ovr||p.baseOvr);
+  const value=n(p.value),wage=n(p.wage)/1000;
+  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.destinationClub||'—')+'</td><td>'+(n(p.loanYears)?n(p.loanYears)+' anys':'—')+'</td><td>'+(cur||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+n(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?n(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button></td></tr>';
+}
 async function serveIndex(res) {
   try {
     let html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
@@ -516,6 +538,18 @@ async function serveIndex(res) {
     }
     const safeState = JSON.stringify(initialState).replace(/</g, '\\u003c');
     html = html.replace('<script>', '<script>window.__SERVER_STATE__='+safeState+';<\/script><script>');
+
+    // Server-render the saved squad so it is visible even before any client-side sync/render runs.
+    const squad=Array.isArray(initialState?.squad)?initialState.squad:[];
+    const activeRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership!=='Cedit fora').map(x=>serverPlayerRow(x.p,x.i)).join('');
+    const loanRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership==='Cedit fora').map(x=>serverLoanRow(x.p,x.i)).join('');
+    html=html.replace('<tbody id="squadTable"></tbody>','<tbody id="squadTable">'+activeRows+'</tbody>');
+    html=html.replace('<tbody id="loanedOutTable"></tbody>','<tbody id="loanedOutTable">'+(loanRows||'<tr><td colspan="11">No hi ha jugadors del Dépor cedits fora.</td></tr>')+'</tbody>');
+    const activeCount=squad.filter(p=>p.ownership!=='Cedit fora').length;
+    const loanCount=squad.filter(p=>p.ownership==='Cedit fora').length;
+    html=html.replace('<div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div>',
+      '<div id="squadHydrationStatus" class="sync-banner ok">Plantilla servidor · '+activeCount+' actius · '+loanCount+' cedits fora</div>');
+
     res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store, no-cache, must-revalidate'});
     res.end(html);
   } catch (err) {
