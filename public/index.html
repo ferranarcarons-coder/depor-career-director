@@ -407,6 +407,24 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
   <dialog id="modal"><form method="dialog" id="modalForm"><div id="modalContent"></div><div class="modal-actions"><button type="button" id="modalCancel" formnovalidate>Cancel·lar</button><button type="button" class="primary" id="modalSave">Guardar</button></div></form></dialog>
   <script>
 const KEY='deporCareerDirectorV1';
+const BACKUP_KEY=KEY+'::backups';
+function stateMeaningful(x){return !!(x&&((x.squad&&x.squad.length)||(x.transfers&&x.transfers.length)||(x.matches&&x.matches.length)||(x.youth&&x.youth.length)))}
+function backupStateSnapshot(x,reason='auto'){
+  try{
+    if(!x||typeof x!=='object')return;
+    const arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]');
+    arr.unshift({at:Date.now(),reason,state:x});
+    localStorage.setItem(BACKUP_KEY,JSON.stringify(arr.slice(0,12)));
+  }catch(e){}
+}
+function stateStamp(x){return Number(x&&x._clientUpdatedAt||0)}
+function squadKey(p){return String(p&&p.name||'').trim().toLowerCase()}
+function mergeLegacySquads(localState,remoteState){
+  const out=[...(remoteState.squad||[])],seen=new Set((remoteState.squad||[]).map(squadKey));
+  for(const p of (localState.squad||[])){const k=squadKey(p);if(k&&!seen.has(k)){out.push(p);seen.add(k)}}
+  return out;
+}
+
 const DEFAULT_OBJECTIVES=[
 {name:'Permanència a Primera',detail:'Mínim: 17è. Esperat: 14è–16è. Excel·lent: 10è–13è. Top 10 és sobre-rendiment, però no converteix el club en europeu consolidat.',progress:0,weight:25,status:'active',priority:'Alta',review:'Maig'},
 {name:'Disciplina salarial',detail:'Creixement de massa salarial: ≤8% correcte; 8–10% alerta; >10% penalització. Cap nouvingut supera el 110% del salari top sense ser jugador franquícia.',progress:0,weight:15,status:'active',priority:'Alta',review:'Mensual'},
@@ -481,6 +499,20 @@ const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(
 let cloudSyncTimer=null;
 let cloudSyncEnabled=false;
 
+function normalizeLoadedSquad(list){
+  return (list||[]).map(p=>{
+    const baseOvr=num(p.baseOvr||p.ovr||p.currentOvr||0);
+    const currentOvr=num(p.currentOvr||p.ovr||p.baseOvr||0);
+    let purchaseOptionType=p.purchaseOptionType||'Sense opció';
+    let purchaseOptionValue=num(p.purchaseOptionValue||0);
+    if(!p.purchaseOptionType&&p.purchaseOption){
+      const legacy=String(p.purchaseOption);
+      if(!/sense/i.test(legacy)){purchaseOptionType='Opció de compra';const m=legacy.replace(',','.').match(/(\d+(?:\.\d+)?)/);if(m)purchaseOptionValue=Number(m[1]);}
+    }
+    let contractYears=num(p.contractYears||0),loanYears=num(p.loanYears||0);
+    return {...p,baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership:p.ownership||'Propietat',parentClub:p.parentClub||'',destinationClub:p.destinationClub||'',wageShareDepor:num(p.wageShareDepor||0),purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
+  });
+}
 function mergeIncomingState(remote){
   if(!remote || typeof remote!=='object') return;
   state={...structuredClone(base),...remote,
@@ -494,6 +526,8 @@ function mergeIncomingState(remote){
     standings:remote.standings||[],
     decisions:(remote.decisions||[]).map(d=>({...d,status:d.status||'open'})),
     reviews:remote.reviews||[],
+    squad:normalizeLoadedSquad(remote.squad||[]),
+    playerOvrOverrides:remote.playerOvrOverrides||{},
     points:Number(remote.points||0)
   };
   localStorage.setItem(KEY,JSON.stringify(state));
@@ -508,9 +542,36 @@ async function cloudLoad(){
     const pill=document.querySelector('.status-pill');
     if(pill) pill.innerHTML='<span class="dot"></span>Sincronitzat';
     if(data.state){
-      mergeIncomingState(data.state);
-      render();
+      const localState=state;
+      const remoteState=data.state;
+      const ls=stateStamp(localState),rs=stateStamp(remoteState);
+      if(ls&&rs){
+        if(ls>rs){
+          backupStateSnapshot(remoteState,'cloud-older');
+          await cloudPush();
+        }else{
+          if(stateMeaningful(localState))backupStateSnapshot(localState,'before-cloud-load');
+          mergeIncomingState(remoteState);
+          render();
+        }
+      }else{
+        // Legacy states had no timestamp. Never let a smaller cloud squad silently erase local players.
+        const localCount=(localState.squad||[]).length,remoteCount=(remoteState.squad||[]).length;
+        if(localCount>remoteCount){
+          const merged={...remoteState,...localState,squad:mergeLegacySquads(localState,remoteState),_clientUpdatedAt:Date.now()};
+          backupStateSnapshot(remoteState,'legacy-cloud-before-merge');
+          mergeIncomingState(merged);
+          render();
+          await cloudPush();
+        }else{
+          if(stateMeaningful(localState))backupStateSnapshot(localState,'legacy-local-before-cloud');
+          mergeIncomingState(remoteState);
+          render();
+        }
+      }
     }else{
+      state._clientUpdatedAt=state._clientUpdatedAt||Date.now();
+      localStorage.setItem(KEY,JSON.stringify(state));
       await cloudPush();
     }
   }catch(e){
@@ -521,18 +582,26 @@ async function cloudLoad(){
 async function cloudPush(){
   if(!cloudSyncEnabled) return;
   try{
-    await fetch('/api/state',{
+    const r=await fetch('/api/state',{
       method:'POST',
       headers:{'content-type':'application/json'},
       body:JSON.stringify({state})
     });
+    if(!r.ok)throw new Error('cloud save failed');
   }catch(e){}
 }
 
+function save(){
+  backupStateSnapshot(state,'before-save');
+  state._clientUpdatedAt=Date.now();
+  localStorage.setItem(KEY,JSON.stringify(state));
+  render();
+  scheduleCloudPush();
+}
 function scheduleCloudPush(){
   if(!cloudSyncEnabled) return;
   clearTimeout(cloudSyncTimer);
-  cloudSyncTimer=setTimeout(cloudPush,500);
+  cloudSyncTimer=setTimeout(cloudPush,250);
 }
 
 function save(){localStorage.setItem(KEY,JSON.stringify(state));render();scheduleCloudPush();}
