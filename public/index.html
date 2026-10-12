@@ -469,11 +469,9 @@ const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
 const serverBootState=window.__SERVER_STATE__&&typeof window.__SERVER_STATE__==='object'?window.__SERVER_STATE__:null;
 let state;
 if(localBootState&&serverBootState){
-  const byName=new Map();
-  for(const p of (serverBootState.squad||[])){const k=String(p?.name||'').trim().toLowerCase();if(k)byName.set(k,p);}
-  for(const p of (localBootState.squad||[])){const k=String(p?.name||'').trim().toLowerCase();if(k)byName.set(k,p);}
   const localStamp=Number(localBootState._clientUpdatedAt||0),serverStamp=Number(serverBootState._clientUpdatedAt||0);
-  state={...(serverStamp>localStamp?serverBootState:localBootState),squad:[...byName.values()],_clientUpdatedAt:Math.max(localStamp,serverStamp)};
+  // The server squad is authoritative because it now comes from its own dedicated table.
+  state={...(serverStamp>localStamp?serverBootState:localBootState),squad:(serverBootState.squad||[]),_clientUpdatedAt:Math.max(localStamp,serverStamp)};
 }else{
   state=localBootState||serverBootState||structuredClone(base);
 }
@@ -536,7 +534,7 @@ function normalizeLoadedSquad(list){
     let contractYears=num(p.contractYears||0),loanYears=num(p.loanYears||0);
     {
       const ownership=(p.ownership==='Propietat'&&p.destinationClub)?'Cedit fora':(p.ownership||'Propietat');
-      return {...p,baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership,parentClub:p.parentClub||'',destinationClub:p.destinationClub||'',wageShareDepor:num(p.wageShareDepor||0),purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
+      return {...p,playerId:p.playerId||(globalThis.crypto?.randomUUID?crypto.randomUUID():('p-'+Date.now()+'-'+Math.random().toString(36).slice(2))),baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership,parentClub:p.parentClub||'',destinationClub:p.destinationClub||'',wageShareDepor:num(p.wageShareDepor||0),purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
     }
   });
 }
@@ -573,64 +571,71 @@ function mergeSquadsSafe(localList,remoteList){
   for(const p of (localList||[])){const k=squadKey(p);if(k)map.set(k,p);}
   return [...map.values()];
 }
+let lastSquadFingerprint='';
+function squadFingerprint(list){return JSON.stringify((list||[]).map(p=>p.playerId+'|'+p.name+'|'+p.ownership+'|'+p.currentOvr+'|'+p.value+'|'+p.wage+'|'+p.contractYears+'|'+p.loanYears+'|'+p.destinationClub+'|'+p.parentClub+'|'+p.minutes+'|'+p.goals+'|'+p.assists))}
+function ensureSquadIds(){
+  state.squad=(state.squad||[]).map(p=>p.playerId?p:{...p,playerId:(globalThis.crypto?.randomUUID?crypto.randomUUID():('p-'+Date.now()+'-'+Math.random().toString(36).slice(2)))});
+}
+async function loadDedicatedSquad(){
+  const r=await fetchWithTimeout('/api/squad',{cache:'no-store'},6000);
+  if(!r.ok)throw new Error('squad load failed '+r.status);
+  const data=await r.json();
+  state.squad=normalizeLoadedSquad(data.squad||[]);
+  ensureSquadIds();
+  lastSquadFingerprint=squadFingerprint(state.squad);
+  localStorage.setItem(KEY,JSON.stringify(state));
+  renderSquadTablesOnly();
+  try{renderPerformance();}catch(e){}
+  return state.squad;
+}
+async function syncDedicatedSquad(force=false){
+  ensureSquadIds();
+  const fp=squadFingerprint(state.squad);
+  if(!force&&fp===lastSquadFingerprint)return true;
+  if(!(state.squad||[]).length && lastSquadFingerprint)return false;
+  try{
+    const r=await fetchWithTimeout('/api/squad',{
+      method:'PUT',
+      headers:{'content-type':'application/json'},
+      body:JSON.stringify({squad:state.squad})
+    },6000);
+    if(!r.ok)throw new Error('squad save failed '+r.status);
+    const data=await r.json();
+    if(Array.isArray(data.squad)) state.squad=normalizeLoadedSquad(data.squad);
+    lastSquadFingerprint=squadFingerprint(state.squad);
+    localStorage.setItem(KEY,JSON.stringify(state));
+    return true;
+  }catch(e){
+    console.error('dedicated squad save',e);
+    return false;
+  }
+}
 async function cloudLoad(){
   const banner=$('#squadHydrationStatus');
   try{
-    if(banner && !(state.squad||[]).length){banner.textContent='Sincronitzant plantilla…';banner.className='sync-banner';}
-    const r=await fetchWithTimeout('/api/state',{cache:'no-store'},6000);
-    if(!r.ok) throw new Error('cloud unavailable '+r.status);
-    const data=await r.json();
+    const [stateRes]=await Promise.all([
+      fetchWithTimeout('/api/state',{cache:'no-store'},6000),
+      loadDedicatedSquad()
+    ]);
     cloudSyncEnabled=true;
-    const pill=document.querySelector('.status-pill');
-    if(pill) pill.innerHTML='<span class="dot"></span>Sincronitzat';
-
-    if(data.state){
-      const localState=state;
-      const remoteState=data.state;
-      const ls=stateStamp(localState),rs=stateStamp(remoteState);
-      const newerBase=ls>=rs?localState:remoteState;
-      const mergedSquad=mergeSquadsSafe(localState.squad||[],remoteState.squad||[]);
-      const merged={...structuredClone(base),...newerBase,squad:mergedSquad,_clientUpdatedAt:Math.max(ls,rs,Date.now())};
-      backupStateSnapshot(localState,'before-cloud-merge');
-      mergeIncomingState(merged);
-
-      // Paint immediately. Never wait for a POST before showing the squad.
-      renderSquadTablesOnly();
-      try{renderPerformance();}catch(e){}
-      const activeN=mergedSquad.filter(p=>p.ownership!=='Cedit fora').length;
-      const loanN=mergedSquad.filter(p=>p.ownership==='Cedit fora').length;
-      if(banner){
-        banner.textContent='Plantilla carregada · '+activeN+' actius · '+loanN+' cedits fora';
-        banner.className='sync-banner ok';
-        setTimeout(()=>banner.classList.add('hidden'),1200);
+    if(stateRes.ok){
+      const data=await stateRes.json();
+      if(data.state){
+        const squad=state.squad;
+        mergeIncomingState({...data.state,squad});
+        state.squad=squad;
+        localStorage.setItem(KEY,JSON.stringify(state));
       }
-
-      // Persist the safe merged copy in the background, without blocking the UI.
-      localStorage.setItem(KEY,JSON.stringify(state));
-      setTimeout(()=>cloudPush(),0);
-    }else{
-      state._clientUpdatedAt=state._clientUpdatedAt||Date.now();
-      localStorage.setItem(KEY,JSON.stringify(state));
-      renderSquadTablesOnly();
-      if(banner){
-        banner.textContent='Plantilla local carregada';
-        banner.className='sync-banner ok';
-        setTimeout(()=>banner.classList.add('hidden'),1200);
-      }
-      setTimeout(()=>cloudPush(),0);
     }
+    renderSquadTablesOnly();
+    try{renderPerformance();}catch(e){}
+    const activeN=activeSquad().length,loanN=(state.squad||[]).filter(isLoanedOut).length;
+    if(banner){banner.textContent='Plantilla guardada · '+activeN+' actius · '+loanN+' cedits fora';banner.className='sync-banner ok';setTimeout(()=>banner.classList.add('hidden'),1200);}
     return true;
   }catch(e){
     cloudSyncEnabled=false;
     renderSquadTablesOnly();
-    try{renderPerformance();}catch(err){}
-    const localN=(state.squad||[]).length;
-    if(banner){
-      banner.textContent=localN
-        ? 'Mostrant còpia local · '+localN+' jugadors'
-        : 'No s’ha pogut carregar la còpia del núvol';
-      banner.className='sync-banner warn';
-    }
+    if(banner){banner.textContent=(state.squad||[]).length?'Mostrant còpia local · '+state.squad.length+' jugadors':'No s’ha pogut carregar la plantilla';banner.className='sync-banner warn';}
     return false;
   }
 }
@@ -638,10 +643,12 @@ async function cloudLoad(){
 async function cloudPush(){
   if(!cloudSyncEnabled) return;
   try{
+    const stateWithoutSquad={...state};
+    delete stateWithoutSquad.squad;
     const r=await fetchWithTimeout('/api/state',{
       method:'POST',
       headers:{'content-type':'application/json'},
-      body:JSON.stringify({state})
+      body:JSON.stringify({state:stateWithoutSquad})
     },6000);
     if(!r.ok)throw new Error('cloud save failed');
   }catch(e){}
@@ -650,9 +657,11 @@ async function cloudPush(){
 function save(){
   backupStateSnapshot(state,'before-save');
   state._clientUpdatedAt=Date.now();
+  ensureSquadIds();
   localStorage.setItem(KEY,JSON.stringify(state));
   renderSquadTablesOnly();
   render();
+  syncDedicatedSquad();
   scheduleCloudPush();
 }
 function scheduleCloudPush(){
@@ -1357,6 +1366,7 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
+ensureSquadIds();lastSquadFingerprint=squadFingerprint(state.squad);
 nav();render();renderSquadTablesOnly();setTimeout(renderSquadTablesOnly,50);
 const bootBanner=$('#squadHydrationStatus');
 if(bootBanner){
