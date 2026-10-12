@@ -766,6 +766,39 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/finance/snapshot' && req.method === 'GET') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=stateRow.rows[0]?.data||{};
+      const squad=await readDedicatedSquad();
+      const finance={...(stateData.finance||{})};
+      const wageContribution=(p)=>{
+        const wage=Number(p?.wage||0);
+        if(!wage)return 0;
+        const own=p?.ownership||'Propietat';
+        if(own==='Propietat')return wage;
+        const shareRaw=Number(p?.wageShareDepor||0);
+        if(own==='Cedit al Dépor' && shareRaw<=0)return wage;
+        const share=Math.max(0,Math.min(100,Number.isFinite(shareRaw)?shareRaw:0));
+        return wage*(share/100);
+      };
+      const currentWages=squad.reduce((a,p)=>a+wageContribution(p),0);
+      const baseline=finance.initialWageByPlayer&&typeof finance.initialWageByPlayer==='object'?finance.initialWageByPlayer:{};
+      const initialWages=Object.values(baseline).reduce((a,v)=>a+Number(v||0),0);
+      const transfers=Array.isArray(stateData.transfers)?stateData.transfers:[];
+      const expenseTypes=new Set(['Compra','Cessió entrada','Agent lliure']);
+      const incomeTypes=new Set(['Venda','Cessió sortida']);
+      const transferSpend=transfers.filter(t=>expenseTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+      const transferIncome=transfers.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+      const initialBudget=11.613983;
+      const available=initialBudget+(transferIncome*.70)-transferSpend;
+      const wageGrowth=initialWages?(currentWages-initialWages)/initialWages:0;
+      const ownedWages=squad.filter(p=>(p.ownership||'Propietat')==='Propietat').reduce((a,p)=>a+wageContribution(p),0);
+      const incomingLoanWages=squad.filter(p=>p.ownership==='Cedit al Dépor').reduce((a,p)=>a+wageContribution(p),0);
+      const outgoingLoanWages=squad.filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+wageContribution(p),0);
+      return json(res,200,{initialBudget,available,transferSpend,transferIncome,reinvestableIncome:transferIncome*.70,initialWages,currentWages,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,squadCount:squad.length},'no-store');
+    }
+
     if (u.pathname === '/api/finance/budget' && req.method === 'POST') {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const body=await readBody(req);
