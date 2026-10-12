@@ -2354,7 +2354,7 @@ setTimeout(()=>cloudLoad(),50);
       try{
         await api('/api/transfers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transfer:data})});
         if(status){status.className='sync-banner ok';status.textContent='Compra guardada.';}
-        purchaseDlg.close();setTimeout(()=>window.location.reload(),200);
+        purchaseDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),200);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('savePurchase',false,'Guardar compra');
@@ -2374,7 +2374,7 @@ setTimeout(()=>cloudLoad(),50);
       try{
         await api('/api/transfers/sale',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
         if(status){status.className='sync-banner ok';status.textContent='Venda registrada i jugador eliminat de la plantilla.';}
-        saleDlg.close();setTimeout(()=>window.location.reload(),200);
+        saleDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),200);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('saveSale',false,'Confirmar venda');
@@ -2393,7 +2393,7 @@ setTimeout(()=>cloudLoad(),50);
       try{
         await api('/api/transfers/loan-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
         if(status){status.className='sync-banner ok';status.textContent='Cessió entrant registrada i jugador afegit a la plantilla.';}
-        loanInDlg.close();setTimeout(()=>window.location.reload(),200);
+        loanInDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),200);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('saveLoanIn',false,'Guardar cessió entrant');
@@ -2412,7 +2412,7 @@ setTimeout(()=>cloudLoad(),50);
       try{
         await api('/api/transfers/loan-out',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
         if(status){status.className='sync-banner ok';status.textContent='Cessió sortint registrada i jugador mogut a cedits fora.';}
-        loanOutDlg.close();setTimeout(()=>window.location.reload(),200);
+        loanOutDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),200);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('saveLoanOut',false,'Guardar cessió sortint');
@@ -2554,6 +2554,46 @@ setTimeout(()=>cloudLoad(),50);
     const el=e.target.closest&&e.target.closest('[data-view="squad"]');
     if(el)setTimeout(renderVisibleSquad,80);
   },true);
+})();
+</script>
+<script>
+(function(){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const moneyM=v=>Number(v||0).toLocaleString('ca-ES',{minimumFractionDigits:0,maximumFractionDigits:3});
+  const wage=v=>Number(v||0)?Number(v).toLocaleString('ca-ES'):'—';
+  async function renderMarketHistory(){
+    const tb=document.getElementById('transferTable');
+    if(!tb)return;
+    try{
+      const r=await fetch('/api/transfers/history?ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const out=await r.json();
+      const rows=Array.isArray(out.transfers)?out.transfers:[];
+      tb.innerHTML=rows.length?[...rows].reverse().map(t=>{
+        const type=esc(t.type||'—');
+        const reason=esc(t.reason||t.context||'');
+        const created=t.createdAt?new Date(t.createdAt).toLocaleDateString('ca-ES'):'';
+        return '<tr>'+
+          '<td><strong>'+esc(t.player||'—')+'</strong>'+(created?'<br><small>'+created+'</small>':'')+'</td>'+
+          '<td>'+type+'</td>'+
+          '<td>'+esc(t.club||'—')+'</td>'+
+          '<td>'+moneyM(t.amount)+' M€</td>'+
+          '<td>'+wage(t.wage)+'</td>'+
+          '<td><span class="pill green">Registrada</span></td>'+
+          '<td>'+reason+'</td>'+
+          '<td></td>'+
+        '</tr>';
+      }).join(''):'<tr><td colspan="8">Encara no hi ha operacions registrades.</td></tr>';
+    }catch(e){
+      console.error('market history render',e);
+    }
+  }
+  window.addEventListener('load',()=>{renderMarketHistory();setTimeout(renderMarketHistory,800);});
+  document.addEventListener('click',e=>{
+    const el=e.target.closest&&e.target.closest('[data-view="transfers"]');
+    if(el)setTimeout(renderMarketHistory,80);
+  },true);
+  window.__refreshMarketHistory=renderMarketHistory;
 })();
 </script>
 </body>
