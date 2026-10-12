@@ -538,7 +538,7 @@ function objectiveProgress(o,r){
   return num(o.progress);
 }
 
-function nav(){ $$('#nav button').forEach(b=>b.onclick=()=>{$$('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');$$('.view').forEach(v=>v.classList.remove('active'));$('#'+b.dataset.view).classList.add('active');$('#pageTitle').textContent=b.textContent.replace(/^\d+/, '').trim();});}
+function nav(){ $('#nav button').forEach(b=>b.onclick=()=>{const view=$('#'+b.dataset.view);if(!view)return;$('#nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');$('.view').forEach(v=>v.classList.remove('active'));view.classList.add('active');const t=$('#pageTitle');if(t)t.textContent=b.textContent.replace(/^\d+/, '').trim();});}
 function resultClass(m){return num(m.gf)>num(m.ga)?'win':num(m.gf)===num(m.ga)?'draw':'loss'}
 function resultLetter(m){return resultClass(m)==='win'?'V':resultClass(m)==='draw'?'E':'D'}
 function matchPoints(m){return resultClass(m)==='win'?3:resultClass(m)==='draw'?1:0}
