@@ -2033,5 +2033,47 @@ if(bootBanner){
 setTimeout(()=>cloudLoad(),50);
 
 </script>
+<script>
+(function(){
+  function euroM(v){return new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(Number(v||0)*1000000)}
+  function wageK(v){return (Number(v||0)/1000).toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1})+' k€/set.'}
+  async function syncFinanceSnapshot(){
+    try{
+      const r=await fetch('/api/finance/snapshot?ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok)return;
+      const f=await r.json();
+      const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val};
+      const setText=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
+      setVal('finInitialBudget','11.613.983 €');
+      setVal('finOperationalOpening',euroM(f.initialBudget));
+      setVal('finBudget',euroM(f.available));
+      setVal('finInitialWages',wageK(f.initialWages));
+      setVal('finWages',wageK(f.currentWages));
+      setVal('finWageGrowth',(f.wageGrowth>=0?'+':'')+(f.wageGrowth*100).toFixed(1)+'%');
+      setText('budgetKpi',euroM(f.available));
+      setText('budgetDelta',euroM(f.initialBudget)+' pressupost inicial');
+      setText('wageGrowthKpi',wageK(f.currentWages));
+      setText('wageGrowthLabel',(f.initialWages?((f.wageGrowth>=0?'+':'')+(f.wageGrowth*100).toFixed(1)+'% vs inici'):'Base salarial actual'));
+      const box=document.getElementById('financeSummary');
+      if(box)box.innerHTML='<div class="summary-grid">'+
+        '<div class="summary-box"><small>Pressupost inicial EA</small><strong>'+euroM(f.initialBudget)+'</strong></div>'+
+        '<div class="summary-box"><small>Despesa mercat</small><strong>'+euroM(f.transferSpend)+'</strong></div>'+
+        '<div class="summary-box"><small>Ingressos mercat</small><strong>'+euroM(f.transferIncome)+'</strong></div>'+
+        '<div class="summary-box"><small>Reinversió vendes (70%)</small><strong>'+euroM(f.reinvestableIncome)+'</strong></div>'+
+        '<div class="summary-box"><small>Disponible ara</small><strong>'+euroM(f.available)+'</strong></div>'+
+        '<div class="summary-box"><small>Massa salarial inicial</small><strong>'+wageK(f.initialWages)+'</strong></div>'+
+        '<div class="summary-box"><small>Massa salarial actual</small><strong>'+wageK(f.currentWages)+'</strong></div>'+
+        '<div class="summary-box"><small>Variació salarial</small><strong>'+(f.wageGrowth>=0?'+':'')+(f.wageGrowth*100).toFixed(1)+'%</strong></div>'+
+        '</div><div class="metric-list" style="margin-top:14px">'+
+        '<div class="metric-line"><span>Jugadors en propietat</span><strong>'+wageK(f.ownedWages)+'</strong></div>'+
+        '<div class="metric-line"><span>Cessions entrants · cost Dépor</span><strong>'+wageK(f.incomingLoanWages)+'</strong></div>'+
+        '<div class="metric-line"><span>Cedits fora · cost Dépor</span><strong>'+wageK(f.outgoingLoanWages)+'</strong></div>'+
+        '</div>';
+    }catch(e){console.error('finance snapshot sync',e)}
+  }
+  window.addEventListener('load',()=>{syncFinanceSnapshot();setTimeout(syncFinanceSnapshot,1200);});
+  document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-view="finance"],[data-view="dashboard"]');if(b)setTimeout(syncFinanceSnapshot,50);});
+})();
+</script>
 </body>
 </html>
