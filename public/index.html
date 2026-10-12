@@ -373,7 +373,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
         <div class="panel-head"><div><p class="eyebrow">SPORTING DIRECTOR REVIEW</p><h2>Anàlisi de plantilla</h2></div><span id="squadAnalysisTactic">4-3-3</span></div>
         <div id="squadAnalysisContent" class="squad-analysis-content"><p>Carrega la plantilla i prem “Analitzar plantilla” per rebre una recomanació esportiva segons el sistema de joc.</p></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th>% sou Dépor</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
       <div class="loaned-out-section">
         <div class="subhead"><strong>CEDITS FORA</strong><span id="loanedOutCount">0 JUGADORS</span></div>
         <div class="table-wrap"><table><thead><tr><th class="sortable" data-loan-sort="name">Jugador</th><th class="sortable" data-loan-sort="pos">Pos.</th><th class="sortable" data-loan-sort="age">Edat</th><th class="sortable" data-loan-sort="destinationClub">Club destí</th><th class="sortable" data-loan-sort="loanYears">Durada cessió</th><th class="sortable" data-loan-sort="currentOvr">OVR</th><th class="sortable" data-loan-sort="value">Valor €M</th><th class="sortable" data-loan-sort="wage">Sou k€/set.</th><th class="sortable" data-loan-sort="wageShareDepor">% sou Dépor</th><th class="sortable" data-loan-sort="purchaseOptionValue">Opció compra</th><th></th></tr></thead><tbody id="loanedOutTable"></tbody></table></div>
@@ -676,6 +676,7 @@ async function loadDedicatedSquad(){
   const data=await r.json();
   state.squad=normalizeLoadedSquad(data.squad||[]);
   ensureSquadIds();
+  const autoLoanShareChanges=applyRealLifeLoanWageShares();
   lastSquadFingerprint=squadFingerprint(state.squad);
   localStorage.setItem(KEY,JSON.stringify(state));
   renderSquadTablesOnly();
@@ -781,11 +782,46 @@ function salePressure(t){
   const level=pts>=7?'Molt alta':pts>=5?'Alta':pts>=3?'Mitjana':'Baixa';
   return {level,score:pts,reasons};
 }
+const REAL_LIFE_LOAN_WAGE_SHARES=[
+  {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Dépor',deporShare:30,confidence:'Mitjana',note:'Atlético assumeix una part molt alta del salari; estimació Dépor 30%.'},
+  {keys:['marc casado'],ownership:'Cedit al Dépor',deporShare:50,confidence:'Baixa-Mitjana',note:'El Barça paga una part de la fitxa; percentatge exacte no publicat.'},
+  {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Dépor',deporShare:60,confidence:'Baixa-Mitjana',note:'La Roma assumeix part del salari; percentatge exacte no publicat.'},
+  {keys:['teun gijselhart'],ownership:'Cedit fora',deporShare:0,confidence:'Mitjana',note:'Estimació: Al Ain assumeix el 100% del salari.'},
+  {keys:['charlie patino','charlie patiño'],ownership:'Cedit fora',deporShare:25,confidence:'Baixa',note:'Estimació realista: Bochum assumeix la major part del salari.'},
+  {keys:['diego gomez','diego gómez'],ownership:'Cedit fora',deporShare:50,confidence:'Baixa',note:'Estimació 50/50 per cessió de desenvolupament a Huesca.'},
+  {keys:['eric puerto'],ownership:'Cedit fora',deporShare:50,confidence:'Baixa',note:'Estimació 50/50 per cessió de desenvolupament a Penafiel.'}
+];
+function normalizeLoanName(v){return normalizeDirectorText(v).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+function realLifeLoanShareFor(p){
+  const n=normalizeLoanName(p?.name||'');
+  return REAL_LIFE_LOAN_WAGE_SHARES.find(x=>x.ownership===p?.ownership&&x.keys.some(k=>normalizeLoanName(k)===n))||null;
+}
+function effectiveDeporWageShare(p){
+  if(!p)return 100;
+  if(p.ownership==='Propietat')return 100;
+  if(p.wageShareManual===true)return Math.max(0,Math.min(100,num(p.wageShareDepor)));
+  const model=realLifeLoanShareFor(p);
+  if(model)return model.deporShare;
+  const stored=num(p.wageShareDepor);
+  if(stored>0)return Math.max(0,Math.min(100,stored));
+  return p.ownership==='Cedit al Dépor'?100:0;
+}
+function applyRealLifeLoanWageShares(){
+  let changed=0;
+  state.squad=(state.squad||[]).map(p=>{
+    if(!['Cedit al Dépor','Cedit fora'].includes(p.ownership)||p.wageShareManual===true)return p;
+    const model=realLifeLoanShareFor(p);
+    if(!model)return p;
+    if(num(p.wageShareDepor)===model.deporShare&&p.wageShareSource==='Real-life model')return p;
+    changed++;
+    return {...p,wageShareDepor:model.deporShare,wageShareSource:'Real-life model',wageShareConfidence:model.confidence,wageShareNote:model.note};
+  });
+  return changed;
+}
 function playerWageContribution(p){
   const wage=num(p?.wage);
   if(!wage)return 0;
-  if(p.ownership==='Cedit fora')return wage*(num(p.wageShareDepor)/100);
-  return wage;
+  return wage*(effectiveDeporWageShare(p)/100);
 }
 function ensureFinanceBaseline(){
   state.finance=state.finance||{};
@@ -1619,7 +1655,7 @@ function renderSquadTablesOnly(){
     const activeEntries=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort);
     activeBody.innerHTML=activeEntries.map(({p,i})=>{
       const d=ovrDelta(p);
-      return '<tr><td><strong>'+p.name+'</strong></td><td>'+(p.pos||'—')+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+(p.ownership==='Cedit al Dépor'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
+      return '<tr><td><strong>'+p.name+'</strong></td><td>'+(p.pos||'—')+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Dépor'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
     }).join('');
     const loanedOut=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>isLoanedOut(x.p)),loanSort);
     const count=$('#loanedOutCount');if(count)count.textContent=loanedOut.length+' JUGADOR'+(loanedOut.length===1?'':'S');
@@ -1693,7 +1729,7 @@ window.editSquadPlayer=i=>{
     {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor','Cedit fora'],value:p.ownership||'Propietat'},
     {label:'Club propietari (si és cessió entrant)',name:'parentClub',value:p.parentClub||'',optional:1},
     {label:'Club destí (si està cedit fora)',name:'destinationClub',value:p.destinationClub||'',optional:1},
-    {label:'% sou que paga el Dépor (cedit fora)',name:'wageShareDepor',type:'number',step:'1',min:0,max:100,value:p.wageShareDepor||0,optional:1},
+    {label:'% sou que paga el Dépor (cessions)',name:'wageShareDepor',type:'number',step:'1',min:0,max:100,value:effectiveDeporWageShare(p),optional:1},
     {label:'Durada cessió actual (anys)',name:'loanYears',type:'number',step:'.5',min:0,max:5,value:p.loanYears||'',placeholder:'Ex.: 1',optional:1},
     {label:'Opció de compra?',name:'purchaseOptionType',type:'select',options:['Sense opció','Opció de compra'],value:p.purchaseOptionType||'Sense opció'},
     {label:'Preu opció compra €M',name:'purchaseOptionValue',type:'number',step:'.001',min:0,value:p.purchaseOptionValue||0,placeholder:'Ex.: 7.5',optional:1},
@@ -1702,7 +1738,7 @@ window.editSquadPlayer=i=>{
     {label:'Durada contracte actual (anys)',name:'contractYears',type:'number',step:'.5',min:0,max:8,value:p.contractYears||'',placeholder:'Ex.: 3',optional:1}
   ],d=>{
     const wage=num(d.wageK)*1000;
-    state.squad[i]={...p,...d,wage,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',destinationClub:d.ownership==='Cedit fora'?(d.destinationClub||''):'',wageShareDepor:d.ownership==='Cedit fora'?num(d.wageShareDepor):0,loanYears:d.ownership!=='Propietat'?num(d.loanYears):0,contractYears:d.ownership==='Cedit al Dépor'?0:num(d.contractYears),purchaseOptionType:d.ownership!=='Propietat'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership!=='Propietat'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0};
+    state.squad[i]={...p,...d,wage,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',destinationClub:d.ownership==='Cedit fora'?(d.destinationClub||''):'',wageShareDepor:d.ownership!=='Propietat'?num(d.wageShareDepor):100,wageShareManual:d.ownership!=='Propietat',wageShareSource:d.ownership!=='Propietat'?'Manual':'Propietat',loanYears:d.ownership!=='Propietat'?num(d.loanYears):0,contractYears:d.ownership==='Cedit al Dépor'?0:num(d.contractYears),purchaseOptionType:d.ownership!=='Propietat'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership!=='Propietat'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0};
   });
 };
 window.returnLoanedPlayer=i=>{
@@ -1957,7 +1993,7 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#lineupTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#enrichSquadBtn').onclick=()=>enrichSquadFromFc27();$('#analyzeSquadBtn').onclick=()=>renderSquadAnalysis(true);
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
-ensureSquadIds();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);
+ensureSquadIds();const loanShareChanges=applyRealLifeLoanWageShares();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);if(loanShareChanges){localStorage.setItem(KEY,JSON.stringify(state));setTimeout(()=>syncDedicatedSquad(true),120);}
 nav();render();renderSquadTablesOnly();renderLineupEditor();setTimeout(()=>{renderSquadTablesOnly();renderLineupEditor();},50);
 const bootBanner=$('#squadHydrationStatus');
 if(bootBanner){
