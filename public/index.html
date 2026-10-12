@@ -290,7 +290,7 @@ body{font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Robot
         <div><p class="eyebrow">SQUAD MANAGEMENT</p><h2>Plantilla</h2><p>OVR base FC27 vs OVR actual de la Career. Actualitza només quan el joc canviï la mitjana.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button><button class="primary" id="addPlayerBtn">+ Afegir jugador</button></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Pos.</th><th>Edat</th><th>Rol</th><th>Vinculació</th><th>Fins</th><th>OVR base</th><th>OVR Career</th><th>Δ OVR</th><th>Últ. update</th><th>Valor €M</th><th>Sou k€/set.</th><th>Contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Pos.</th><th>Edat</th><th>Rol</th><th>Vinculació</th><th>Durada</th><th>OVR base</th><th>OVR Career</th><th>Δ OVR</th><th>Últ. update</th><th>Valor €M</th><th>Sou k€/set.</th><th>Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
     </section>
     <section id="performance" class="view">
       <div class="section-toolbar">
@@ -443,7 +443,19 @@ state.squad=(state.squad||[]).map(p=>{
         if(m) purchaseOptionValue=Number(m[1]);
       }
     }
-    return {...p,baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership:p.ownership||'Propietat',parentClub:p.parentClub||'',loanEnd:p.loanEnd||'',purchaseOptionType,purchaseOptionValue};
+    {
+    let contractYears=num(p.contractYears||0);
+    let loanYears=num(p.loanYears||0);
+    if(!contractYears && p.ownership!=='Cedit al Dépor' && p.contract){
+      const y=String(p.contract).match(/20\d{2}/);
+      if(y) contractYears=Math.max(0,Number(y[0])-2026);
+    }
+    if(!loanYears && p.ownership==='Cedit al Dépor' && p.loanEnd){
+      const y=String(p.loanEnd).match(/20\d{2}/);
+      if(y) loanYears=Math.max(0,Number(y[0])-2026);
+    }
+    return {...p,baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership:p.ownership||'Propietat',parentClub:p.parentClub||'',loanEnd:p.loanEnd||'',purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
+  }
   }
 });
 state.playerOvrOverrides=state.playerOvrOverrides||{};
@@ -576,7 +588,7 @@ function realism(){
   if(score<85)alerts.unshift(['ALTA','Realism Score per sota de l’objectiu',`${score}/100. L’objectiu del projecte és mantenir-se ≥85.`,'red']);
   const loanedSquad=state.squad.filter(p=>p.ownership==='Cedit al Dépor');
   loanedSquad.forEach(p=>{
-    if(!p.loanEnd)alerts.push(['BAIXA','Cessió sense data final',p.name+': indica quan acaba la cessió.','amber']);
+    if(!num(p.loanYears))alerts.push(['BAIXA','Cessió sense durada',p.name+': indica la durada de la cessió actual.','amber']);
     if(p.purchaseOptionType==='Opció de compra'&&!num(p.purchaseOptionValue))alerts.push(['BAIXA','Opció de compra sense preu',p.name+': indica l’import de l’opció de compra abans que acabi la cessió.','amber']);
   });
   if(!alerts.length)alerts.push(['OK','Projecte sota control','Cap desviació rellevant de les normes.','green']);
@@ -859,10 +871,14 @@ function playerLinkHtml(p){
   return '<span class="player-link-badge owned">PROPI</span>';
 }
 function playerLinkEnd(p){
-  if(p.ownership!=='Cedit al Dépor')return p.contract||'—';
-  const end=p.loanEnd||'Pendent';
-  if(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)>0) return end+' · Opció '+valueMDisplay(p.purchaseOptionValue)+' M€';
-  return end;
+  if(p.ownership!=='Cedit al Dépor'){
+    const y=num(p.contractYears);
+    return y?y+' any'+(y===1?'':'s'):'Pendent';
+  }
+  const y=num(p.loanYears);
+  const base=y?y+' any'+(y===1?'':'s'):'Pendent';
+  if(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)>0) return base+' · Opció '+valueMDisplay(p.purchaseOptionValue)+' M€';
+  return base;
 }
 function wageKDisplay(n){const v=num(n)/1000;return Number.isInteger(v)?String(v):v.toFixed(1)}
 function valueMDisplay(n){const v=num(n);return v?String(Number(v.toFixed(3))):'0'}
@@ -882,11 +898,11 @@ function updatePerformanceContext(){
   const sel=$('#performancePlayer'),ctx=$('#performancePlayerContext'); if(!sel||!ctx)return;
   const i=Number(sel.value),p=state.squad[i];
   if(!p){ctx.textContent='Selecciona un jugador de la plantilla per carregar-ne les dades.';return;}
-  ctx.innerHTML='<strong>'+p.name+'</strong> · '+(p.pos||'—')+' · '+(p.age||'—')+' anys · OVR '+(playerCareerOvr(p)||'—')+' · '+(p.role||'—')+' · '+(p.ownership==='Cedit al Dépor'?('Cedit per '+(p.parentClub||'club pendent')+' fins '+(p.loanEnd||'data pendent')+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)>0?' · Opció '+valueMDisplay(p.purchaseOptionValue)+' M€':'')):'Propietat Dépor')+' · Valor '+valueMDisplay(p.value)+' M€ · Sou '+wageKDisplay(p.wage)+' k€/set.';
+  ctx.innerHTML='<strong>'+p.name+'</strong> · '+(p.pos||'—')+' · '+(p.age||'—')+' anys · OVR '+(playerCareerOvr(p)||'—')+' · '+(p.role||'—')+' · '+(p.ownership==='Cedit al Dépor'?('Cedit per '+(p.parentClub||'club pendent')+' · '+(num(p.loanYears)?num(p.loanYears)+' anys':'durada pendent')+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)>0?' · Opció '+valueMDisplay(p.purchaseOptionValue)+' M€':'')):('Propietat Dépor · '+(num(p.contractYears)?num(p.contractYears)+' anys de contracte':'durada pendent')))+' · Valor '+valueMDisplay(p.value)+' M€ · Sou '+wageKDisplay(p.wage)+' k€/set.';
   $('#performanceMinutes').value=num(p.minutes)||0;$('#performanceGoals').value=num(p.goals)||0;$('#performanceAssists').value=num(p.assists)||0;
 }
 window.editPerformance=i=>{const sel=$('#performancePlayer');if(!sel)return;sel.value=String(i);updatePerformanceContext();$('#performanceMinutes')?.focus();};
-function render(){renderDashboard();renderTransferLab();const r=realism();$('#squadTable').innerHTML=state.squad.map((p,i)=>{const d=ovrDelta(p);return `<tr><td><strong>${p.name}</strong></td><td>${p.pos}</td><td>${p.age}</td><td>${p.role}</td><td>${playerLinkHtml(p)}</td><td>${playerLinkEnd(p)}</td><td>${playerBaseOvr(p)||'—'}</td><td><strong>${playerCareerOvr(p)||'—'}</strong></td><td>${deltaHtml(d)}</td><td>${p.ovrUpdatedAt||'—'}</td><td>${valueMDisplay(p.value)}</td><td>${wageKDisplay(p.wage)}</td><td>${p.contract}</td><td><button class="ghost-btn" onclick="editSquadPlayer(${i})">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr(${i})">OVR</button> <button class="icon-btn" onclick="removeItem('squad',${i})">✕</button></td></tr>`}).join('');renderPerformance();$('#transferTable').innerHTML=state.transfers.map((t,i)=>{const linked=r.penalties.filter(p=>p.detail&&p.detail.includes(t.player));const pts=linked.reduce((a,p)=>a+p.pts,0);const sp=t.type==='Oferta rebutjada'?salePressure(t):null;const label=sp?`Pressió ${sp.level}`:pts>=5?'Alt risc':pts>=2?'Revisar':'Coherent';const cls=sp?(sp.level==='Molt alta'||sp.level==='Alta'?'red':sp.level==='Mitjana'?'amber':'green'):pts>=5?'red':pts>=2?'amber':'green';return `<tr><td><strong>${t.player}</strong></td><td>${t.type}</td><td>${t.club||'-'}</td><td>${t.amount||0}</td><td>${t.wage||'-'}</td><td><span class="pill ${cls}">${label}</span></td><td>${t.reason||t.context||''}</td><td><button class="icon-btn" onclick="removeItem('transfers',${i})">✕</button></td></tr>`}).join('');['finInitialBudget','finBudget','finInitialWages','finWages','finExtraIncome'].forEach(id=>{const k={finInitialBudget:'initialBudget',finBudget:'budget',finInitialWages:'initialWages',finWages:'wages',finExtraIncome:'extraIncome'}[id];$('#'+id).value=state.finance[k]});$('#clubStatus').value=state.clubStatus;$('#financeSummary').innerHTML=`<div class="summary-grid"><div class="summary-box"><small>Compres</small><strong>${money(r.spend)}</strong></div><div class="summary-box"><small>Vendes</small><strong>${money(r.sales)}</strong></div><div class="summary-box"><small>Net spend</small><strong>${money(r.net)}</strong></div><div class="summary-box"><small>Wage growth</small><strong>${(r.wageGrowth*100).toFixed(1)}%</strong></div></div>`;$('#objectivesList').innerHTML=state.objectives.map((o,i)=>{const prog=objectiveProgress(o,r);return `<div class="objective-card"><div><div class="objective-meta"><span class="meta-chip ${o.priority==='Alta'?'high':o.priority==='Mitjana'?'medium':'low'}">${o.priority||'Mitjana'}</span><span class="meta-chip">Revisió: ${o.review||'Temporada'}</span><span class="meta-chip">Pes ${o.weight}%</span></div><strong>${o.name}</strong><p>${o.detail}</p><div class="progress"><span style="width:${prog}%"></span></div><p>${prog}% · ${['Copa amb context'].includes(o.name)?'seguiment manual':'calculat automàticament'}</p></div><button class="icon-btn" onclick="removeItem('objectives',${i})">✕</button></div>`}).join('');$('#youthTable').innerHTML=state.youth.map((p,i)=>`<tr><td><strong>${p.name}</strong></td><td>${p.age}</td><td>${p.pos}</td><td>${p.origin}</td><td>${p.ovr}</td><td>${p.minutes||0}</td><td>${p.appearances||0}</td><td>${p.status}</td><td><button class="icon-btn" onclick="removeItem('youth',${i})">✕</button></td></tr>`).join('');$('#historyList').innerHTML=state.history.length?state.history.map(h=>`<div class="timeline-item"><strong>${h.season} · ${h.position}</strong><p>${h.summary}</p><small>Realism ${h.score}/100 · Net spend ${money(h.net)}</small></div>`).join(''):`<div class="timeline-item"><strong>Encara no hi ha temporades tancades</strong><p>Quan acabi el 2026/27 guardarem el resum aquí.</p></div>`;$('#rulesScoreBand').textContent=`${r.score} · ${r.band}`;$('#scoreBreakdown').innerHTML=r.breakdown.map(b=>`<div class="score-break-card ${b.lost?'penalty':'ok'}"><span>${b.cat.toUpperCase()}</span><strong>${b.score}/${b.weight}</strong><small>${b.lost?`-${b.lost} punts actius`:'Sense desviacions'}</small></div>`).join('');$('#rulesList').innerHTML=state.rules.map((x,i)=>`<div class="rule-card"><div class="rule-meta"><span class="meta-chip">${x[2]||'Projecte'}</span></div><strong>${i+1}. ${x[0]}</strong><p>${x[1]}</p></div>`).join('');
+function render(){renderDashboard();renderTransferLab();const r=realism();$('#squadTable').innerHTML=state.squad.map((p,i)=>{const d=ovrDelta(p);return `<tr><td><strong>${p.name}</strong></td><td>${p.pos}</td><td>${p.age}</td><td>${p.role}</td><td>${playerLinkHtml(p)}</td><td>${playerLinkEnd(p)}</td><td>${playerBaseOvr(p)||'—'}</td><td><strong>${playerCareerOvr(p)||'—'}</strong></td><td>${deltaHtml(d)}</td><td>${p.ovrUpdatedAt||'—'}</td><td>${valueMDisplay(p.value)}</td><td>${wageKDisplay(p.wage)}</td><td>${p.ownership==='Cedit al Dépor'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—')}</td><td><button class="ghost-btn" onclick="editSquadPlayer(${i})">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr(${i})">OVR</button> <button class="icon-btn" onclick="removeItem('squad',${i})">✕</button></td></tr>`}).join('');renderPerformance();$('#transferTable').innerHTML=state.transfers.map((t,i)=>{const linked=r.penalties.filter(p=>p.detail&&p.detail.includes(t.player));const pts=linked.reduce((a,p)=>a+p.pts,0);const sp=t.type==='Oferta rebutjada'?salePressure(t):null;const label=sp?`Pressió ${sp.level}`:pts>=5?'Alt risc':pts>=2?'Revisar':'Coherent';const cls=sp?(sp.level==='Molt alta'||sp.level==='Alta'?'red':sp.level==='Mitjana'?'amber':'green'):pts>=5?'red':pts>=2?'amber':'green';return `<tr><td><strong>${t.player}</strong></td><td>${t.type}</td><td>${t.club||'-'}</td><td>${t.amount||0}</td><td>${t.wage||'-'}</td><td><span class="pill ${cls}">${label}</span></td><td>${t.reason||t.context||''}</td><td><button class="icon-btn" onclick="removeItem('transfers',${i})">✕</button></td></tr>`}).join('');['finInitialBudget','finBudget','finInitialWages','finWages','finExtraIncome'].forEach(id=>{const k={finInitialBudget:'initialBudget',finBudget:'budget',finInitialWages:'initialWages',finWages:'wages',finExtraIncome:'extraIncome'}[id];$('#'+id).value=state.finance[k]});$('#clubStatus').value=state.clubStatus;$('#financeSummary').innerHTML=`<div class="summary-grid"><div class="summary-box"><small>Compres</small><strong>${money(r.spend)}</strong></div><div class="summary-box"><small>Vendes</small><strong>${money(r.sales)}</strong></div><div class="summary-box"><small>Net spend</small><strong>${money(r.net)}</strong></div><div class="summary-box"><small>Wage growth</small><strong>${(r.wageGrowth*100).toFixed(1)}%</strong></div></div>`;$('#objectivesList').innerHTML=state.objectives.map((o,i)=>{const prog=objectiveProgress(o,r);return `<div class="objective-card"><div><div class="objective-meta"><span class="meta-chip ${o.priority==='Alta'?'high':o.priority==='Mitjana'?'medium':'low'}">${o.priority||'Mitjana'}</span><span class="meta-chip">Revisió: ${o.review||'Temporada'}</span><span class="meta-chip">Pes ${o.weight}%</span></div><strong>${o.name}</strong><p>${o.detail}</p><div class="progress"><span style="width:${prog}%"></span></div><p>${prog}% · ${['Copa amb context'].includes(o.name)?'seguiment manual':'calculat automàticament'}</p></div><button class="icon-btn" onclick="removeItem('objectives',${i})">✕</button></div>`}).join('');$('#youthTable').innerHTML=state.youth.map((p,i)=>`<tr><td><strong>${p.name}</strong></td><td>${p.age}</td><td>${p.pos}</td><td>${p.origin}</td><td>${p.ovr}</td><td>${p.minutes||0}</td><td>${p.appearances||0}</td><td>${p.status}</td><td><button class="icon-btn" onclick="removeItem('youth',${i})">✕</button></td></tr>`).join('');$('#historyList').innerHTML=state.history.length?state.history.map(h=>`<div class="timeline-item"><strong>${h.season} · ${h.position}</strong><p>${h.summary}</p><small>Realism ${h.score}/100 · Net spend ${money(h.net)}</small></div>`).join(''):`<div class="timeline-item"><strong>Encara no hi ha temporades tancades</strong><p>Quan acabi el 2026/27 guardarem el resum aquí.</p></div>`;$('#rulesScoreBand').textContent=`${r.score} · ${r.band}`;$('#scoreBreakdown').innerHTML=r.breakdown.map(b=>`<div class="score-break-card ${b.lost?'penalty':'ok'}"><span>${b.cat.toUpperCase()}</span><strong>${b.score}/${b.weight}</strong><small>${b.lost?`-${b.lost} punts actius`:'Sense desviacions'}</small></div>`).join('');$('#rulesList').innerHTML=state.rules.map((x,i)=>`<div class="rule-card"><div class="rule-meta"><span class="meta-chip">${x[2]||'Projecte'}</span></div><strong>${i+1}. ${x[0]}</strong><p>${x[1]}</p></div>`).join('');
 renderProductCompletion(r);}
 
 function renderProductCompletion(r){
@@ -927,15 +943,15 @@ window.editSquadPlayer=i=>{
     {label:'Rol',name:'role',value:p.role||''},
     {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor'],value:p.ownership||'Propietat'},
     {label:'Club propietari (si és cedit)',name:'parentClub',value:p.parentClub||'',optional:1},
-    {label:'Cessió fins',name:'loanEnd',value:p.loanEnd||'',placeholder:'Ex.: 30/06/2027',optional:1},
+    {label:'Durada cessió actual (anys)',name:'loanYears',type:'number',step:'.5',min:0,max:5,value:p.loanYears||'',placeholder:'Ex.: 1',optional:1},
     {label:'Opció de compra?',name:'purchaseOptionType',type:'select',options:['Sense opció','Opció de compra'],value:p.purchaseOptionType||'Sense opció'},
     {label:'Preu opció compra €M',name:'purchaseOptionValue',type:'number',step:'.001',min:0,value:p.purchaseOptionValue||0,placeholder:'Ex.: 7.5',optional:1},
     {label:'Valor €M',name:'value',type:'number',step:'.001',min:0,value:p.value||0},
     {label:'Sou k€/set.',name:'wageK',type:'number',step:'.1',min:0,value:num(p.wage)/1000},
-    {label:'Contracte fins',name:'contract',value:p.contract||'',optional:1}
+    {label:'Durada contracte actual (anys)',name:'contractYears',type:'number',step:'.5',min:0,max:8,value:p.contractYears||'',placeholder:'Ex.: 3',optional:1}
   ],d=>{
     const wage=num(d.wageK)*1000;
-    state.squad[i]={...p,...d,wage,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',loanEnd:d.ownership==='Cedit al Dépor'?(d.loanEnd||''):'',purchaseOptionType:d.ownership==='Cedit al Dépor'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership==='Cedit al Dépor'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0};
+    state.squad[i]={...p,...d,wage,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',loanYears:d.ownership==='Cedit al Dépor'?num(d.loanYears):0,contractYears:d.ownership==='Cedit al Dépor'?0:num(d.contractYears),purchaseOptionType:d.ownership==='Cedit al Dépor'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership==='Cedit al Dépor'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0};
   });
 };
 window.updatePlayerOvr=i=>{
@@ -975,18 +991,18 @@ $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[
  {label:'Rol',name:'role'},
  {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor'],value:'Propietat'},
  {label:'Club propietari (si és cedit)',name:'parentClub',optional:1},
- {label:'Cessió fins',name:'loanEnd',placeholder:'Ex.: 30/06/2027',optional:1},
+ {label:'Durada cessió actual (anys)',name:'loanYears',type:'number',step:'.5',min:0,max:5,placeholder:'Ex.: 1',optional:1},
  {label:'Opció de compra?',name:'purchaseOptionType',type:'select',options:['Sense opció','Opció de compra'],value:'Sense opció'},
  {label:'Preu opció compra €M',name:'purchaseOptionValue',type:'number',step:'.001',min:0,placeholder:'Ex.: 7.5',optional:1},
  {label:'OVR base FC27',name:'baseOvr',type:'number',min:1,max:99,optional:1},
  {label:'OVR actual Career',name:'currentOvr',type:'number',min:1,max:99,optional:1},
  {label:'Valor €M',name:'value',type:'number',step:'.001',min:0,placeholder:'Ex.: 0.450 o 3.2'},
  {label:'Sou k€/set.',name:'wageK',type:'number',step:'.1',min:0,placeholder:'Ex.: 26.5'},
- {label:'Contracte fins',name:'contract'}
+ {label:'Durada contracte actual (anys)',name:'contractYears',type:'number',step:'.5',min:0,max:8,placeholder:'Ex.: 3'}
 ],d=>{
  const base=num(d.baseOvr||d.currentOvr),cur=num(d.currentOvr||d.baseOvr);
  const wage=num(d.wageK)*1000;
- state.squad.push({...d,wage,baseOvr:base,currentOvr:cur,minutes:0,goals:0,assists:0,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',loanEnd:d.ownership==='Cedit al Dépor'?(d.loanEnd||''):'',purchaseOptionType:d.ownership==='Cedit al Dépor'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership==='Cedit al Dépor'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0,ovrUpdatedAt:cur?new Date().toLocaleDateString('ca-ES'):''});
+ state.squad.push({...d,wage,baseOvr:base,currentOvr:cur,minutes:0,goals:0,assists:0,ownership:d.ownership||'Propietat',parentClub:d.ownership==='Cedit al Dépor'?(d.parentClub||''):'',loanYears:d.ownership==='Cedit al Dépor'?num(d.loanYears):0,contractYears:d.ownership==='Cedit al Dépor'?0:num(d.contractYears),loanEnd:'',contract:'',purchaseOptionType:d.ownership==='Cedit al Dépor'?(d.purchaseOptionType||'Sense opció'):'Sense opció',purchaseOptionValue:d.ownership==='Cedit al Dépor'&&d.purchaseOptionType==='Opció de compra'?num(d.purchaseOptionValue):0,ovrUpdatedAt:cur?new Date().toLocaleDateString('ca-ES'):''});
  if(d.name&&cur)state.playerOvrOverrides[d.name.trim().toLowerCase()]=cur;
 });
 function inferMarketFromNationality(nat){
