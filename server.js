@@ -780,6 +780,54 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/transfers/sale' && req.method === 'POST') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      const playerId=String(body?.playerId||'').trim();
+      if(!playerId) return json(res,400,{error:'Selecciona un jugador de la plantilla.'});
+
+      const playerRow=await pool.query('SELECT data FROM squad_players WHERE player_id=$1',[playerId]);
+      if(!playerRow.rowCount) return json(res,404,{error:'Aquest jugador ja no és a la plantilla.'});
+      const p=playerRow.rows[0].data||{};
+      const amount=Number(body?.amount||0);
+      if(!Number.isFinite(amount)||amount<0) return json(res,400,{error:'Import de venda no vàlid.'});
+
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
+      const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
+      const sale={
+        player:p.name||'Jugador',
+        playerId,
+        type:'Venda',
+        window:String(body?.window||'Estiu'),
+        club:String(body?.club||'').trim(),
+        amount,
+        playerValue:Number(p.value||0),
+        wage:Number(p.wage||0),
+        age:Number(p.age||0),
+        role:p.role||'No aplica',
+        buyerLevel:Number(body?.buyerLevel||0),
+        contractYears:Number(body?.contractYears||p.contractYears||0),
+        reason:String(body?.reason||'').trim(),
+        createdAt:new Date().toISOString()
+      };
+      transfers.push(sale);
+      stateData.transfers=transfers;
+      stateData._clientUpdatedAt=Date.now();
+
+      await pool.query('BEGIN');
+      try{
+        await pool.query('INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',['main',JSON.stringify(stateData)]);
+        await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(stateData)]);
+        await pool.query('DELETE FROM squad_players WHERE player_id=$1',[playerId]);
+        await pool.query('COMMIT');
+      }catch(e){
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+      return json(res,200,{ok:true,sale,removedPlayerId:playerId,count:transfers.length});
+    }
+
     if (u.pathname === '/api/transfers' && req.method === 'POST') {
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const body=await readBody(req);
