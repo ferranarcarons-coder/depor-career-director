@@ -780,6 +780,106 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/transfers/loan-in' && req.method === 'POST') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      if(!String(body?.player||'').trim() || !String(body?.club||'').trim()) return json(res,400,{error:'Falten jugador o club propietari.'});
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
+      const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
+      const playerId=crypto.randomUUID();
+      const loan={
+        player:String(body.player).trim(),
+        playerId,
+        type:'Cessió entrada',
+        window:String(body.window||'Estiu'),
+        club:String(body.club).trim(),
+        amount:Number(body.amount||0),
+        wage:Number(body.wage||0),
+        age:Number(body.age||0),
+        role:String(body.role||'Rotació'),
+        reason:'Cessió entrant',
+        createdAt:new Date().toISOString()
+      };
+      const squadPlayer={
+        playerId,
+        name:String(body.player).trim(),
+        ownership:'Cedit al Dépor',
+        parentClub:String(body.club).trim(),
+        destinationClub:'',
+        wage:Number(body.wage||0),
+        wageShareDepor:Number(body.wageShareDepor||100),
+        wageShareManual:true,
+        loanYears:Number(body.loanYears||1),
+        purchaseOptionType:String(body.purchaseOptionType||'Sense opció'),
+        purchaseOptionValue:Number(body.purchaseOptionValue||0),
+        age:Number(body.age||0),
+        currentOvr:Number(body.currentOvr||0),
+        baseOvr:Number(body.currentOvr||0),
+        role:String(body.role||'Rotació'),
+        minutes:0,goals:0,assists:0
+      };
+      transfers.push(loan);
+      stateData.transfers=transfers;
+      stateData._clientUpdatedAt=Date.now();
+
+      await pool.query('BEGIN');
+      try{
+        await pool.query('INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',['main',JSON.stringify(stateData)]);
+        await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(stateData)]);
+        await pool.query('INSERT INTO squad_players(player_id,data,updated_at) VALUES($1,$2::jsonb,NOW())',[playerId,JSON.stringify(squadPlayer)]);
+        await pool.query('COMMIT');
+      }catch(e){await pool.query('ROLLBACK');throw e;}
+      return json(res,200,{ok:true,transfer:loan,player:squadPlayer});
+    }
+
+    if (u.pathname === '/api/transfers/loan-out' && req.method === 'POST') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      const playerId=String(body?.playerId||'').trim();
+      if(!playerId) return json(res,400,{error:'Selecciona un jugador.'});
+      const playerRow=await pool.query('SELECT data FROM squad_players WHERE player_id=$1',[playerId]);
+      if(!playerRow.rowCount) return json(res,404,{error:'Jugador no trobat a la plantilla.'});
+      const p=playerRow.rows[0].data||{};
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
+      const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
+      const loan={
+        player:p.name||'Jugador',
+        playerId,
+        type:'Cessió sortida',
+        window:String(body.window||'Estiu'),
+        club:String(body.club||'').trim(),
+        amount:Number(body.amount||0),
+        wage:Number(p.wage||0),
+        age:Number(p.age||0),
+        role:p.role||'No aplica',
+        reason:'Cessió sortint',
+        createdAt:new Date().toISOString()
+      };
+      const updatedPlayer={...p,
+        ownership:'Cedit fora',
+        destinationClub:String(body.club||'').trim(),
+        wageShareDepor:Number(body.wageShareDepor||0),
+        wageShareManual:true,
+        loanYears:Number(body.loanYears||1),
+        purchaseOptionType:String(body.purchaseOptionType||'Sense opció'),
+        purchaseOptionValue:Number(body.purchaseOptionValue||0)
+      };
+      transfers.push(loan);
+      stateData.transfers=transfers;
+      stateData._clientUpdatedAt=Date.now();
+
+      await pool.query('BEGIN');
+      try{
+        await pool.query('INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',['main',JSON.stringify(stateData)]);
+        await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(stateData)]);
+        await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',[playerId,JSON.stringify(updatedPlayer)]);
+        await pool.query('COMMIT');
+      }catch(e){await pool.query('ROLLBACK');throw e;}
+      return json(res,200,{ok:true,transfer:loan,player:updatedPlayer});
+    }
+
     if (u.pathname === '/api/transfers/sale' && req.method === 'POST') {
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const body=await readBody(req);
