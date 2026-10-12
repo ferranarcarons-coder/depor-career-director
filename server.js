@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
+import crypto from 'node:crypto';
 import { parse as parseCsv } from 'csv-parse/sync';
 const { Pool } = pg;
 
@@ -37,6 +38,11 @@ async function initDb() {
       data JSONB NOT NULL,
       saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS squad_players (
+      player_id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS player_cache (
       cache_key TEXT PRIMARY KEY,
       payload JSONB NOT NULL,
@@ -50,6 +56,21 @@ async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  // One-time migration: recover any legacy squad still present inside career_state.
+  const squadCount = await pool.query('SELECT COUNT(*)::int AS n FROM squad_players');
+  if (Number(squadCount.rows[0]?.n || 0) === 0) {
+    const legacy = await pool.query("SELECT data->'squad' AS squad FROM career_state WHERE id=$1", ['main']);
+    const players = Array.isArray(legacy.rows[0]?.squad) ? legacy.rows[0].squad : [];
+    for (const raw of players) {
+      const player = {...raw, playerId: raw.playerId || crypto.randomUUID()};
+      await pool.query(
+        `INSERT INTO squad_players(player_id,data,updated_at)
+         VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
+        [player.playerId, JSON.stringify(player)]
+      );
+    }
+  }
   dbReady = true;
   return true;
 }
@@ -504,6 +525,12 @@ async function searchPlayers(q) {
   return [];
 }
 
+async function readDedicatedSquad(){
+  if(!dbReady) return [];
+  const r=await pool.query('SELECT data FROM squad_players ORDER BY updated_at ASC, player_id ASC');
+  return r.rows.map(x=>x.data);
+}
+
 function escHtml(v='') {
   return String(v??'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
@@ -530,17 +557,20 @@ async function serveIndex(res) {
   try {
     let html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
     let initialState = null;
+    let dedicatedSquad = [];
     if (dbReady) {
       try {
         const r = await pool.query('SELECT data FROM career_state WHERE id = $1', ['main']);
         if (r.rowCount) initialState = r.rows[0].data;
+        dedicatedSquad = await readDedicatedSquad();
       } catch (e) {}
     }
+    initialState = {...(initialState||{}), squad:dedicatedSquad};
     const safeState = JSON.stringify(initialState).replace(/</g, '\\u003c');
     html = html.replace('<script>', '<script>window.__SERVER_STATE__='+safeState+';<\/script><script>');
 
     // Server-render the saved squad so it is visible even before any client-side sync/render runs.
-    const squad=Array.isArray(initialState?.squad)?initialState.squad:[];
+    const squad=dedicatedSquad;
     const activeRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership!=='Cedit fora').map(x=>serverPlayerRow(x.p,x.i)).join('');
     const loanRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership==='Cedit fora').map(x=>serverLoanRow(x.p,x.i)).join('');
     html=html.replace('<tbody id="squadTable"></tbody>','<tbody id="squadTable">'+activeRows+'</tbody>');
@@ -570,28 +600,70 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (u.pathname === '/api/squad' && req.method === 'GET') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const squad=await readDedicatedSquad();
+      return json(res, 200, {squad}, 'no-store');
+    }
+
+    if (u.pathname === '/api/squad' && req.method === 'PUT') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      if(!body || !Array.isArray(body.squad)) return json(res,400,{error:'Plantilla no vàlida.'});
+      const incoming=body.squad.map(raw=>({...raw,playerId:raw.playerId||crypto.randomUUID()}));
+      const current=await pool.query('SELECT COUNT(*)::int AS n FROM squad_players');
+      if(Number(current.rows[0]?.n||0)>0 && incoming.length===0){
+        return json(res,409,{error:'Protecció activa: una plantilla existent no es pot buidar amb una sincronització.'});
+      }
+      await pool.query('BEGIN');
+      try{
+        const ids=[];
+        for(const player of incoming){
+          ids.push(player.playerId);
+          await pool.query(
+            `INSERT INTO squad_players(player_id,data,updated_at)
+             VALUES($1,$2::jsonb,NOW())
+             ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
+            [player.playerId,JSON.stringify(player)]
+          );
+        }
+        if(ids.length){
+          await pool.query('DELETE FROM squad_players WHERE NOT (player_id = ANY($1::text[]))',[ids]);
+        }
+        await pool.query('COMMIT');
+      }catch(e){
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+      return json(res,200,{ok:true,squad:incoming});
+    }
+
     if (u.pathname === '/api/state' && req.method === 'GET') {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const r = await pool.query('SELECT data, updated_at FROM career_state WHERE id = $1', ['main']);
       if (!r.rowCount) return json(res, 200, {state:null});
-      return json(res, 200, {state:r.rows[0].data, updatedAt:r.rows[0].updated_at}, 'no-store');
+      const stateData={...(r.rows[0].data||{})};
+      delete stateData.squad;
+      return json(res, 200, {state:stateData, updatedAt:r.rows[0].updated_at}, 'no-store');
     }
 
     if (u.pathname === '/api/state' && req.method === 'POST') {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const body = await readBody(req);
       if (!body || typeof body.state !== 'object') return json(res, 400, {error:'Estat no vàlid.'});
+      const stateToSave={...body.state};
+      delete stateToSave.squad;
       await pool.query('BEGIN');
       try {
         await pool.query(
           'INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',
-          ['main', JSON.stringify(body.state)]
+          ['main', JSON.stringify(stateToSave)]
         );
         await pool.query(
           `INSERT INTO career_state(id,data,updated_at)
            VALUES($1,$2::jsonb,NOW())
            ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
-          ['main', JSON.stringify(body.state)]
+          ['main', JSON.stringify(stateToSave)]
         );
         await pool.query(
           `DELETE FROM career_state_history
