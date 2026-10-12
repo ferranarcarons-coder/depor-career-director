@@ -448,7 +448,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     <section id="finance" class="view">
       <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Tu només fixes el pressupost inicial. La resta es calcula automàticament amb plantilla, salaris, renovacions i operacions de mercat.</p></div></div>
       <div class="form-grid panel">
-        <label>Pressupost inicial EA (€M)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn">Guardar i recalcular</button></div></label>
+        <label>Pressupost inicial EA (€M)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn" onclick="saveInitialBudget()">Guardar i recalcular</button></div></label>
         <label>Pressupost operatiu inicial (70%)<input id="finOperationalOpening" type="text" readonly></label>
         <label>Pressupost disponible ara<input id="finBudget" type="text" readonly></label>
         <label>Massa salarial inicial<input id="finInitialWages" type="text" readonly></label>
@@ -753,9 +753,9 @@ function save(){
   state._clientUpdatedAt=Date.now();
   ensureSquadIds();
   localStorage.setItem(KEY,JSON.stringify(state));
-  renderSquadTablesOnly();
-  render();
-  syncDedicatedSquad();
+  try{renderSquadTablesOnly();}catch(e){console.error('squad render after save',e)}
+  try{render();}catch(e){console.error('app render after save',e)}
+  try{syncDedicatedSquad();}catch(e){console.error('squad sync after save',e)}
   scheduleCloudPush();
 }
 function scheduleCloudPush(){
@@ -1910,21 +1910,37 @@ $('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',n
 $('#addObjectiveBtn').onclick=()=>modal('Afegir objectiu',[{label:'Objectiu',name:'name',full:1},{label:'Detall',name:'detail',full:1},{label:'Progrés %',name:'progress',type:'number',min:0,max:100},{label:'Pes %',name:'weight',type:'number',min:0,max:100},{label:'Prioritat',name:'priority',type:'select',options:['Alta','Mitjana','Baixa']},{label:'Revisió',name:'review'}],d=>state.objectives.push({...d,progress:num(d.progress),weight:num(d.weight),status:'active'}));
 $('#addYouthBtn').onclick=()=>modal('Afegir jove',[{label:'Nom',name:'name',full:1},{label:'Edat',name:'age',type:'number'},{label:'Posició',name:'pos'},{label:'Origen',name:'origin'},{label:'OVR',name:'ovr',type:'number'},{label:'Minuts',name:'minutes',type:'number'},{label:'Aparicions',name:'appearances',type:'number'},{label:'Estat',name:'status',type:'select',options:['Cantera','Primer equip','Cedit']}],d=>{if(d.status==='Primer equip'&&state.youth.filter(y=>y.status==='Primer equip').length>=2){alert('⛔ PROMOCIÓ BLOQUEJADA\n\nLa normativa permet un màxim de 2 promocions significatives de cantera per temporada.');return false;}state.youth.push(d);return true;});
 $('#addSeasonBtn').onclick=()=>{const r=realism();modal('Tancar temporada',[{label:'Temporada',name:'season',full:1},{label:'Posició final',name:'position'},{label:'Resum',name:'summary',full:1}],d=>{const pos=num(d.position);const franchiseUsed=state.transfers.some(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)&&t.franchise==='Sí');state.history.unshift({...d,score:r.score,net:r.net,franchiseUsed,clubStatus:state.clubStatus});if(pos){let next=state.clubStatus;if(pos<=7)next=Math.max(next,5.4);else if(pos<=10)next=Math.max(next,5.2);else if(pos<=13)next=Math.max(next,5.0);else if(pos<=17)next=Math.max(4.5,Math.min(next,4.8));else next=Math.max(4.2,next-.2);state.clubStatus=Number(next.toFixed(1));}})};
-$('#saveInitialBudgetBtn').onclick=()=>{
+window.saveInitialBudget=()=>{
   const input=$('#finInitialBudget'),status=$('#financeSaveStatus');
   const value=num(input?.value);
-  if(value<=0){if(status){status.className='sync-banner warn';status.textContent='Introdueix un pressupost inicial superior a 0.';}return;}
+  if(value<=0){
+    if(status){status.className='sync-banner warn';status.textContent='Introdueix un pressupost inicial superior a 0.';}
+    return;
+  }
+  state.finance=state.finance||{};
   state.finance.initialBudget=value;
   ensureFinanceBaseline();
-  save();
+
+  // Persist first, independently of rendering.
+  state._clientUpdatedAt=Date.now();
+  localStorage.setItem(KEY,JSON.stringify(state));
+  scheduleCloudPush();
+
   const fm=financialModel();
+  if($('#finOperationalOpening'))$('#finOperationalOpening').value=money(fm.openingOperational);
+  if($('#finBudget'))$('#finBudget').value=money(fm.available);
+  if($('#finInitialWages'))$('#finInitialWages').value=wageKDisplay(fm.initialWages)+' k€/set.';
+  if($('#finWages'))$('#finWages').value=wageKDisplay(fm.currentWages)+' k€/set.';
+  if($('#finWageGrowth'))$('#finWageGrowth').value=(fm.wageGrowth>=0?'+':'')+(fm.wageGrowth*100).toFixed(1)+'%';
+
   if(status){
     status.className='sync-banner ok';
     status.textContent='Pressupost guardat · '+money(fm.openingOperational)+' operatius · '+money(fm.available)+' disponibles ara';
-    setTimeout(()=>status.classList.add('hidden'),2200);
   }
+  try{render();}catch(e){console.error('render after budget save',e)}
+  if(status)setTimeout(()=>status.classList.add('hidden'),2600);
 };
-$('#finInitialBudget').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#saveInitialBudgetBtn').click();}};
+$('#finInitialBudget').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();saveInitialBudget();}};
 
 $('#editNextMatchBtn').onclick=()=>modal('Proper partit',[{label:'Rival',name:'opponent',full:1},{label:'Competició',name:'competition'},{label:'Data / jornada',name:'date'},{label:'Localització',name:'venue',type:'select',options:['Casa','Fora']}],d=>state.nextMatch=d);
 $('#editStandingsBtn').onclick=()=>modal('Actualitzar classificació',[{label:'Enganxa files: posició | club | PJ | punts | diferència gols',name:'rows',type:'textarea',full:1,placeholder:'1 | Club | 10 | 24 | +12'}],d=>{state.standings=d.rows.split(/\n+/).map(line=>line.split('|').map(x=>x.trim())).filter(x=>x.length>=4).map(x=>({pos:num(x[0]),club:x[1],pj:num(x[2]),pts:num(x[3]),dg:num(x[4])})).filter(x=>x.pos&&x.club)});
