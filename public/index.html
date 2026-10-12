@@ -138,6 +138,16 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 .sync-banner.ok{background:#eef9f2;color:#2b7a4b;border-color:#d4eadc}
 .sync-banner.warn{background:#fff8e8;color:#8a6700;border-color:#f1e1b5}
 .sync-banner.hidden{display:none}
+
+.squad-analysis-panel{margin:0 0 16px}
+.squad-analysis-content{display:grid;gap:12px}
+.squad-analysis-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.squad-analysis-card{padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+.squad-analysis-card strong{display:block;margin-bottom:5px}
+.squad-analysis-card p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
+.squad-analysis-list{display:grid;gap:8px}
+.squad-analysis-item{padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;background:#fafcff}
+@media(max-width:900px){.squad-analysis-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -304,9 +314,22 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     <section id="squad" class="view">
       <div class="section-toolbar">
         <div><p class="eyebrow">SQUAD MANAGEMENT</p><h2>Plantilla</h2><p>OVR base FC27 vs OVR actual de la Career. Actualitza només quan el joc canviï la mitjana.</p></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button><button class="primary" id="addPlayerBtn">+ Afegir jugador</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+          <label style="min-width:150px">Sistema base
+            <select id="squadTacticSelect">
+              <option>4-3-3</option><option>4-2-3-1</option><option>4-4-2</option><option>3-4-3</option><option>3-5-2</option><option>4-1-4-1</option><option>4-3-2-1</option><option>5-3-2</option>
+            </select>
+          </label>
+          <button class="ghost-btn" id="analyzeSquadBtn">Analitzar plantilla</button>
+          <button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button>
+          <button class="primary" id="addPlayerBtn">+ Afegir jugador</button>
+        </div>
       </div>
       <div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div>
+      <div id="squadAnalysisPanel" class="panel squad-analysis-panel">
+        <div class="panel-head"><div><p class="eyebrow">SPORTING DIRECTOR REVIEW</p><h2>Anàlisi de plantilla</h2></div><span id="squadAnalysisTactic">4-3-3</span></div>
+        <div id="squadAnalysisContent" class="squad-analysis-content"><p>Carrega la plantilla i prem “Analitzar plantilla” per rebre una recomanació esportiva segons el sistema de joc.</p></div>
+      </div>
       <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
       <div class="loaned-out-section">
         <div class="subhead"><strong>CEDITS FORA</strong><span id="loanedOutCount">0 JUGADORS</span></div>
@@ -343,7 +366,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     <section id="transferlab" class="view">
 <div class="section-toolbar"><div><p class="eyebrow">SPORTING DIRECTOR ASSISTANT</p><h2>Director AI</h2><p>Parla amb el director esportiu sobre fitxatges, vendes, cessions, ofertes i necessitats de plantilla.</p></div><button class="ghost-btn" id="clearDirectorChatBtn">Netejar xat</button></div>
 <div class="director-ai-layout"><article class="panel director-chat-panel"><div class="director-chat-head"><div><p class="eyebrow">LIVE DECISION ROOM</p><h2>Què vols fer al mercat?</h2></div><span class="status-pill"><span class="dot"></span> Context de la Career</span></div>
-<div class="director-quick-actions"><button type="button" data-director-prompt="Busco un central realista per fitxar">Busco un central</button><button type="button" data-director-prompt="A qui vendries de la plantilla?">A qui vendries?</button><button type="button" data-director-prompt="A qui cediries de la plantilla?">A qui cediries?</button><button type="button" data-director-prompt="Quins jugadors de la plantilla no tocaria vendre?">Intocables</button></div>
+<div class="director-quick-actions"><button type="button" data-director-prompt="Què faries amb aquesta plantilla segons la tàctica actual?">Analitza plantilla</button><button type="button" data-director-prompt="Busco un central realista per fitxar">Busco un central</button><button type="button" data-director-prompt="A qui vendries de la plantilla?">A qui vendries?</button><button type="button" data-director-prompt="A qui cediries de la plantilla?">A qui cediries?</button><button type="button" data-director-prompt="Quins jugadors de la plantilla no tocaria vendre?">Intocables</button></div>
 <div id="directorChatMessages" class="director-chat-messages"></div>
 <div class="director-chat-input"><textarea id="directorChatInput" rows="3" placeholder="Ex.: Vendries Yeremay per 18 M€? · Cedim aquest central? · És realista fitxar Bryan Gil? · Busco un lateral esquerre..."></textarea><button class="primary" id="directorChatSendBtn">Preguntar</button></div>
 <p class="lab-note">El Director AI utilitza la teva plantilla, OVR Career, minuts, rols, contractes, salaris, Club Status, pressupost i normes actives. No registra cap operació automàticament.</p></article>
@@ -409,7 +432,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
       <div class="section-toolbar"><div><p class="eyebrow">SEASON ONBOARDING</p><h2>Setup inicial</h2><p>Checklist per deixar la temporada preparada abans de prendre la primera decisió esportiva.</p></div></div>
       <div class="detail-grid">
         <article class="panel"><div class="panel-head"><div><p class="eyebrow">READINESS</p><h2>Preparació 2026/27</h2></div><span id="setupStatus">PENDENT</span></div><div class="setup-summary"><div id="readinessRing" class="readiness-ring"><div><strong id="readinessPct">0%</strong><small>READY</small></div></div><div id="setupChecklist" class="setup-checklist"></div></div></article>
-        <article class="panel"><div class="panel-head"><div><p class="eyebrow">PROJECT BASELINE</p><h2>Context del club</h2></div></div><div class="form-grid"><label>Temporada<input id="setupSeason" type="text"></label><label>Fase del projecte<input id="setupStage" type="text"></label><label>Club Status<input id="setupClubStatus" type="number" min="1" max="10" step="0.1"></label><label>Objectiu principal<input id="setupTarget" type="text"></label></div><p class="helper">Aquest bloc defineix el context. Les dades detallades es carreguen a Plantilla, Finances, Objectius i Mercat.</p></article>
+        <article class="panel"><div class="panel-head"><div><p class="eyebrow">PROJECT BASELINE</p><h2>Context del club</h2></div></div><div class="form-grid"><label>Temporada<input id="setupSeason" type="text"></label><label>Fase del projecte<input id="setupStage" type="text"></label><label>Club Status<input id="setupClubStatus" type="number" min="1" max="10" step="0.1"></label><label>Objectiu principal<input id="setupTarget" type="text"></label><label>Sistema base<select id="setupTactic"><option>4-3-3</option><option>4-2-3-1</option><option>4-4-2</option><option>3-4-3</option><option>3-5-2</option><option>4-1-4-1</option><option>4-3-2-1</option><option>5-3-2</option></select></label></div><p class="helper">Aquest bloc defineix el context. Les dades detallades es carreguen a Plantilla, Finances, Objectius i Mercat.</p></article>
       </div>
       <article class="panel"><div class="panel-head"><div><p class="eyebrow">STARTING POINT</p><h2>Abans del primer mercat</h2></div></div><div class="review-grid"><div class="review-entry"><h3>Jerarquia de plantilla</h3><p>Identifica intocables, titulars, rotació, cedibles i vendibles. Això evita decidir només per OVR.</p></div><div class="review-entry"><h3>Necessitats reals</h3><p>Defineix un màxim de 2–3 mancances abans de mirar el mercat. Primer necessitat, després nom.</p></div><div class="review-entry"><h3>Top salarial</h3><p>Carrega salaris per saber quin és el sostre real abans d’oferir contractes.</p></div><div class="review-entry"><h3>Objectius EA vs nostres</h3><p>Registra els objectius del joc, però els reinterpretarem segons la constitució del projecte.</p></div></div></article>
     </section>
@@ -464,7 +487,7 @@ const DEFAULT_RULES=[
 ['Reality Override','Si una regla numèrica produeix una decisió absurda, preval el realisme. L’excepció s’ha de registrar i justificar; no és una carta blanca.','Governança'],
 ['Regla d’or','Podem fracassar. No reiniciem partits, no canviem normes per protegir resultats i acceptem conseqüències esportives i econòmiques.','Governança']
 ];
-const base={directorChat:[],season:'2026/27',position:'15è',target:'Permanència',clubStatus:4.6,projectStage:'Fase 1 · Supervivència',points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:12,budget:12,initialWages:240000,wages:240000,extraIncome:0},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
+const base={directorChat:[],season:'2026/27',position:'15è',target:'Permanència',clubStatus:4.6,projectStage:'Fase 1 · Supervivència',tactic:'4-3-3',points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:12,budget:12,initialWages:240000,wages:240000,extraIncome:0},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
 const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
 const serverBootState=window.__SERVER_STATE__&&typeof window.__SERVER_STATE__==='object'?window.__SERVER_STATE__:null;
 let state;
@@ -915,9 +938,9 @@ function renderTransferLab(){
  box.scrollTop=box.scrollHeight;
  const incoming=state.transfers.filter(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)).length;
  const sales=state.transfers.filter(t=>t.type==='Venda').length;
- const squadAvg=state.squad.length?state.squad.reduce((a,p)=>a+playerCareerOvr(p),0)/state.squad.length:0;
+ const activeForAvg=activeSquad();const squadAvg=activeForAvg.length?activeForAvg.reduce((a,p)=>a+playerCareerOvr(p),0)/activeForAvg.length:0;
  const ctx=$('#directorContextStats');
- if(ctx)ctx.innerHTML=[['Club Status',num(state.clubStatus).toFixed(1)+'/10'],['Plantilla',activeSquad().length+' actius'],['Cedits fora',state.squad.filter(isLoanedOut).length],['OVR mitjà',squadAvg?squadAvg.toFixed(1):'—'],['Pressupost',money(state.finance.budget)],['Entrades',incoming],['Vendes',sales]].map(x=>'<div class="director-context-stat"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join('');
+ if(ctx)ctx.innerHTML=[['Club Status',num(state.clubStatus).toFixed(1)+'/10'],['Sistema',state.tactic||'4-3-3'],['Plantilla',activeSquad().length+' actius'],['Cedits fora',state.squad.filter(isLoanedOut).length],['OVR mitjà',squadAvg?squadAvg.toFixed(1):'—'],['Pressupost',money(state.finance.budget)],['Entrades',incoming],['Vendes',sales]].map(x=>'<div class="director-context-stat"><span>'+x[0]+'</span><strong>'+x[1]+'</strong></div>').join('');
 }
 function normalizeDirectorText(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function findSquadPlayerFromText(text){const t=normalizeDirectorText(text);let best=null,bestScore=0;for(const p of state.squad){const n=normalizeDirectorText(p.name);if(n&&t.includes(n))return p;const tokens=n.split(/\s+/).filter(x=>x.length>=4);const score=tokens.filter(x=>t.includes(x)).length;if(score>bestScore){best=p;bestScore=score}}return bestScore?best:null}
@@ -953,8 +976,92 @@ function cleanPlayerQuery(text){return String(text||'').replace(/\b(veus|creus|s
 async function directorSigningAdvice(text){const q=cleanPlayerQuery(text);if(q.length<2)return {label:'NECESSITO EL NOM',cls:'warn',text:'Digues-me quin jugador estàs valorant.'};const sr=await fetch('/api/players/search?q='+encodeURIComponent(q));const sd=await sr.json();const ref=(sd.players||[])[0];if(!ref)return {label:'NO TROBAT',cls:'warn',text:'No he trobat aquest jugador a la BBDD FC27.'};const dr=await fetch('/api/players/detail?'+new URLSearchParams({id:ref.id||'',name:ref.name||''}));const dd=await dr.json();const p=dd.player||ref;const current=careerOvrForName(p.name,p.overall)||p.overall;const expected=num(current)>=80?'Titular':num(current)>=75?'Rotació':'Aposta';const a={player:p.name,position:p.position,age:p.age,club:p.club,market:inferMarketFromNationality(p.nationality),playerLevel:overallToLevel(current),originLevel:inferOriginLevel(p.club,p.league,current),overall:current,currentRole:'Titular',expectedRole:expected,type:'Compra',hiddenPotential:'No',franchise:'No',context:'Normal',override:'No'};const r=transferFit(a);return {label:r.verdict.toUpperCase()+' · '+r.score+'/100',cls:r.cls,text:r.recommend+(r.reasons.length?' '+r.reasons.slice(0,3).join(' · '):'')}}
 async function directorPositionAdvice(pos){const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=5');const d=await r.json();const list=d.players||[];if(!list.length)return {label:'SENSE CANDIDATS',cls:'warn',text:'No he trobat candidats adequats.'};return {label:'TOP '+pos,cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · '+p.club+' · OVR '+p.overall+' · Fit '+p.scoutingScore+'/100').join('<br>')}}
 function squadSellCandidates(mode){if(!state.squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};const list=state.squad.map(p=>({p,a:outgoingAdvice(p,mode)})).sort((x,y)=>y.a.score-x.a.score).slice(0,5);return {label:mode==='loan'?'CANDIDATS A CESSIÓ':'CANDIDATS A VENDA',cls:'good',text:list.map((x,i)=>(i+1)+'. '+x.p.name+' · '+x.a.label+' · '+x.a.score+'/100 · '+x.a.text).join('<br><br>')}}
+function canonicalPos(pos){
+  const p=normalizeDirectorText(pos).toUpperCase().replace(/\s+/g,'');
+  const map={POR:'GK',GK:'GK',LD:'RB',RB:'RB',CAD:'RB',LI:'LB',LB:'LB',CAI:'LB',DFC:'CB',CB:'CB',CENTRAL:'CB',
+    MCD:'CDM',CDM:'CDM',MC:'CM',CM:'CM',MCO:'CAM',CAM:'CAM',MD:'RM',RM:'RM',MI:'LM',LM:'LM',
+    ED:'RW',RW:'RW',EI:'LW',LW:'LW',DC:'ST',ST:'ST',DELANTERO:'ST'};
+  return map[p]||p;
+}
+function formationSlots(tactic){
+  const m={
+    '4-3-3':['GK','RB','CB','CB','LB','CM','CDM','CM','RW','LW','ST'],
+    '4-2-3-1':['GK','RB','CB','CB','LB','CDM','CDM','CAM','RW','LW','ST'],
+    '4-4-2':['GK','RB','CB','CB','LB','RM','CM','CM','LM','ST','ST'],
+    '3-4-3':['GK','CB','CB','CB','RM','CM','CM','LM','RW','LW','ST'],
+    '3-5-2':['GK','CB','CB','CB','RM','CM','CDM','CM','LM','ST','ST'],
+    '4-1-4-1':['GK','RB','CB','CB','LB','CDM','RM','CM','CM','LM','ST'],
+    '4-3-2-1':['GK','RB','CB','CB','LB','CM','CDM','CM','CAM','CAM','ST'],
+    '5-3-2':['GK','RB','CB','CB','CB','LB','CM','CDM','CM','ST','ST']
+  };
+  return m[tactic]||m['4-3-3'];
+}
+function positionFitsSlot(playerPos,slot){
+  const p=canonicalPos(playerPos);
+  if(p===slot)return true;
+  const compat={
+    RB:['RM'],LB:['LM'],CB:['CDM'],CDM:['CM','CB'],CM:['CDM','CAM'],CAM:['CM','RW','LW'],
+    RM:['RW','RB'],LM:['LW','LB'],RW:['RM','CAM','ST'],LW:['LM','CAM','ST'],ST:['RW','LW','CAM']
+  };
+  return (compat[slot]||[]).includes(p);
+}
+function buildBestXI(){
+  const players=activeSquad().map((p,i)=>({p,i,used:false}));
+  const slots=formationSlots(state.tactic||'4-3-3');
+  const xi=[];
+  for(const slot of slots){
+    const candidates=players.filter(x=>!x.used&&positionFitsSlot(x.p.pos,slot)).sort((a,b)=>playerCareerOvr(b.p)-playerCareerOvr(a.p));
+    const pick=candidates[0];
+    if(pick){pick.used=true;xi.push({slot,p:pick.p});}
+    else xi.push({slot,p:null});
+  }
+  return xi;
+}
+function squadFormationAnalysis(){
+  const squad=activeSquad();
+  if(!squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};
+  const tactic=state.tactic||'4-3-3',xi=buildBestXI();
+  const missing=xi.filter(x=>!x.p).map(x=>x.slot);
+  const starterOvrs=xi.filter(x=>x.p).map(x=>playerCareerOvr(x.p)).filter(Boolean);
+  const avgXI=starterOvrs.length?starterOvrs.reduce((a,b)=>a+b,0)/starterOvrs.length:0;
+  const depth={};
+  for(const slot of [...new Set(formationSlots(tactic))])depth[slot]=squad.filter(p=>positionFitsSlot(p.pos,slot)).length;
+  const thin=Object.entries(depth).filter(([,n])=>n<2).sort((a,b)=>a[1]-b[1]);
+  const sell= squad.map(p=>({p,a:outgoingAdvice(p,'sell')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
+  const loan= squad.map(p=>({p,a:outgoingAdvice(p,'loan')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
+  const lowStarters=xi.filter(x=>x.p).sort((a,b)=>playerCareerOvr(a.p)-playerCareerOvr(b.p)).slice(0,3);
+  const priorities=[];
+  if(missing.length)priorities.push('Falten perfils naturals per '+[...new Set(missing)].join(', ')+'.');
+  if(thin.length)priorities.push('Profunditat justa a '+thin.slice(0,3).map(x=>x[0]).join(', ')+'.');
+  if(lowStarters.length)priorities.push('Punts millorables de l’XI: '+lowStarters.map(x=>x.slot+' ('+x.p.name+', OVR '+playerCareerOvr(x.p)+')').join(' · ')+'.');
+  if(!priorities.length)priorities.push('La plantilla encaixa bé amb el '+tactic+' i no hi ha cap forat estructural evident.');
+  const xiText=xi.map(x=>x.slot+': '+(x.p?x.p.name+' ('+playerCareerOvr(x.p)+')':'—')).join(' · ');
+  return {
+    label:'ANÀLISI '+tactic,cls:missing.length?'warn':'good',
+    text:'<strong>XI orientatiu</strong><br>'+xiText+'<br><br><strong>Diagnòstic</strong><br>'+priorities.join('<br>')+
+      '<br><br><strong>Possibles vendes</strong><br>'+(sell.length?sell.map(x=>x.p.name+' · '+x.a.label+' '+x.a.score+'/100').join('<br>'):'Cap venda prioritària clara.')+
+      '<br><br><strong>Possibles cessions</strong><br>'+(loan.length?loan.map(x=>x.p.name+' · '+x.a.label+' '+x.a.score+'/100').join('<br>'):'Cap cessió prioritària clara.')+
+      '<br><br>OVR mitjà XI: '+(avgXI?avgXI.toFixed(1):'—')+'.'
+  };
+}
+function renderSquadAnalysis(){
+  const box=$('#squadAnalysisContent'),tag=$('#squadAnalysisTactic');if(!box)return;
+  if(tag)tag.textContent=state.tactic||'4-3-3';
+  const a=squadFormationAnalysis();
+  if(a.label==='PLANTILLA PENDENT'){box.innerHTML='<p>'+a.text+'</p>';return;}
+  const xi=buildBestXI();
+  const missing=xi.filter(x=>!x.p).length;
+  const sell=activeSquad().map(p=>({p,a:outgoingAdvice(p,'sell')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
+  const loan=activeSquad().map(p=>({p,a:outgoingAdvice(p,'loan')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
+  box.innerHTML='<div class="squad-analysis-grid">'+
+    '<div class="squad-analysis-card"><strong>Encaix tàctic</strong><p>'+(missing?missing+' posicions de l’XI sense perfil natural.':'XI complet amb perfils naturals o compatibles.')+'</p></div>'+
+    '<div class="squad-analysis-card"><strong>Vendes</strong><p>'+(sell.length?sell.map(x=>x.p.name+' ('+x.a.score+'/100)').join(' · '):'Cap venda prioritària.')+'</p></div>'+
+    '<div class="squad-analysis-card"><strong>Cessions</strong><p>'+(loan.length?loan.map(x=>x.p.name+' ('+x.a.score+'/100)').join(' · '):'Cap cessió prioritària.')+'</p></div></div>'+
+    '<div class="squad-analysis-list"><div class="squad-analysis-item">'+a.text+'</div></div>';
+}
 async function directorReply(text){
  const t=normalizeDirectorText(text),pos=positionFromText(text);
+ if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica'))return squadFormationAnalysis();
  if(pos&&(t.includes('busco')||t.includes('necessit')||t.includes('reforc')||t.includes('reforz')))return directorPositionAdvice(pos);
  const player=findSquadPlayerFromText(text);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
@@ -1099,7 +1206,7 @@ function renderSquadTablesOnly(){
     bindSquadSortHeaders();
   }catch(e){console.error('squad-only render',e)}
 }
-function render(){try{renderDashboard();}catch(e){console.error('dashboard render',e)}try{renderTransferLab();}catch(e){console.error('director render',e)}let r;try{r=realism();}catch(e){console.error('realism render',e);r={penalties:[],alerts:[],spend:0,sales:0,net:0,wageGrowth:0,score:100,band:'Realistic',breakdown:[]}}renderSquadTablesOnly();$('#transferTable').innerHTML=state.transfers.map((t,i)=>{const linked=r.penalties.filter(p=>p.detail&&p.detail.includes(t.player));const pts=linked.reduce((a,p)=>a+p.pts,0);const sp=t.type==='Oferta rebutjada'?salePressure(t):null;const label=sp?`Pressió ${sp.level}`:pts>=5?'Alt risc':pts>=2?'Revisar':'Coherent';const cls=sp?(sp.level==='Molt alta'||sp.level==='Alta'?'red':sp.level==='Mitjana'?'amber':'green'):pts>=5?'red':pts>=2?'amber':'green';return `<tr><td><strong>${t.player}</strong></td><td>${t.type}</td><td>${t.club||'-'}</td><td>${t.amount||0}</td><td>${t.wage||'-'}</td><td><span class="pill ${cls}">${label}</span></td><td>${t.reason||t.context||''}</td><td><button class="icon-btn" onclick="removeItem('transfers',${i})">✕</button></td></tr>`}).join('');['finInitialBudget','finBudget','finInitialWages','finWages','finExtraIncome'].forEach(id=>{const k={finInitialBudget:'initialBudget',finBudget:'budget',finInitialWages:'initialWages',finWages:'wages',finExtraIncome:'extraIncome'}[id];$('#'+id).value=state.finance[k]});$('#clubStatus').value=state.clubStatus;$('#financeSummary').innerHTML=`<div class="summary-grid"><div class="summary-box"><small>Compres</small><strong>${money(r.spend)}</strong></div><div class="summary-box"><small>Vendes</small><strong>${money(r.sales)}</strong></div><div class="summary-box"><small>Net spend</small><strong>${money(r.net)}</strong></div><div class="summary-box"><small>Wage growth</small><strong>${(r.wageGrowth*100).toFixed(1)}%</strong></div></div>`;$('#objectivesList').innerHTML=state.objectives.map((o,i)=>{const prog=objectiveProgress(o,r);return `<div class="objective-card"><div><div class="objective-meta"><span class="meta-chip ${o.priority==='Alta'?'high':o.priority==='Mitjana'?'medium':'low'}">${o.priority||'Mitjana'}</span><span class="meta-chip">Revisió: ${o.review||'Temporada'}</span><span class="meta-chip">Pes ${o.weight}%</span></div><strong>${o.name}</strong><p>${o.detail}</p><div class="progress"><span style="width:${prog}%"></span></div><p>${prog}% · ${['Copa amb context'].includes(o.name)?'seguiment manual':'calculat automàticament'}</p></div><button class="icon-btn" onclick="removeItem('objectives',${i})">✕</button></div>`}).join('');$('#youthTable').innerHTML=state.youth.map((p,i)=>`<tr><td><strong>${p.name}</strong></td><td>${p.age}</td><td>${p.pos}</td><td>${p.origin}</td><td>${p.ovr}</td><td>${p.minutes||0}</td><td>${p.appearances||0}</td><td>${p.status}</td><td><button class="icon-btn" onclick="removeItem('youth',${i})">✕</button></td></tr>`).join('');$('#historyList').innerHTML=state.history.length?state.history.map(h=>`<div class="timeline-item"><strong>${h.season} · ${h.position}</strong><p>${h.summary}</p><small>Realism ${h.score}/100 · Net spend ${money(h.net)}</small></div>`).join(''):`<div class="timeline-item"><strong>Encara no hi ha temporades tancades</strong><p>Quan acabi el 2026/27 guardarem el resum aquí.</p></div>`;$('#rulesScoreBand').textContent=`${r.score} · ${r.band}`;$('#scoreBreakdown').innerHTML=r.breakdown.map(b=>`<div class="score-break-card ${b.lost?'penalty':'ok'}"><span>${b.cat.toUpperCase()}</span><strong>${b.score}/${b.weight}</strong><small>${b.lost?`-${b.lost} punts actius`:'Sense desviacions'}</small></div>`).join('');$('#rulesList').innerHTML=state.rules.map((x,i)=>`<div class="rule-card"><div class="rule-meta"><span class="meta-chip">${x[2]||'Projecte'}</span></div><strong>${i+1}. ${x[0]}</strong><p>${x[1]}</p></div>`).join('');
+function render(){try{renderDashboard();}catch(e){console.error('dashboard render',e)}try{renderTransferLab();}catch(e){console.error('director render',e)}let r;try{r=realism();}catch(e){console.error('realism render',e);r={penalties:[],alerts:[],spend:0,sales:0,net:0,wageGrowth:0,score:100,band:'Realistic',breakdown:[]}}renderSquadTablesOnly();renderSquadAnalysis();if($('#squadTacticSelect'))$('#squadTacticSelect').value=state.tactic||'4-3-3';if($('#setupTactic'))$('#setupTactic').value=state.tactic||'4-3-3';$('#transferTable').innerHTML=state.transfers.map((t,i)=>{const linked=r.penalties.filter(p=>p.detail&&p.detail.includes(t.player));const pts=linked.reduce((a,p)=>a+p.pts,0);const sp=t.type==='Oferta rebutjada'?salePressure(t):null;const label=sp?`Pressió ${sp.level}`:pts>=5?'Alt risc':pts>=2?'Revisar':'Coherent';const cls=sp?(sp.level==='Molt alta'||sp.level==='Alta'?'red':sp.level==='Mitjana'?'amber':'green'):pts>=5?'red':pts>=2?'amber':'green';return `<tr><td><strong>${t.player}</strong></td><td>${t.type}</td><td>${t.club||'-'}</td><td>${t.amount||0}</td><td>${t.wage||'-'}</td><td><span class="pill ${cls}">${label}</span></td><td>${t.reason||t.context||''}</td><td><button class="icon-btn" onclick="removeItem('transfers',${i})">✕</button></td></tr>`}).join('');['finInitialBudget','finBudget','finInitialWages','finWages','finExtraIncome'].forEach(id=>{const k={finInitialBudget:'initialBudget',finBudget:'budget',finInitialWages:'initialWages',finWages:'wages',finExtraIncome:'extraIncome'}[id];$('#'+id).value=state.finance[k]});$('#clubStatus').value=state.clubStatus;$('#financeSummary').innerHTML=`<div class="summary-grid"><div class="summary-box"><small>Compres</small><strong>${money(r.spend)}</strong></div><div class="summary-box"><small>Vendes</small><strong>${money(r.sales)}</strong></div><div class="summary-box"><small>Net spend</small><strong>${money(r.net)}</strong></div><div class="summary-box"><small>Wage growth</small><strong>${(r.wageGrowth*100).toFixed(1)}%</strong></div></div>`;$('#objectivesList').innerHTML=state.objectives.map((o,i)=>{const prog=objectiveProgress(o,r);return `<div class="objective-card"><div><div class="objective-meta"><span class="meta-chip ${o.priority==='Alta'?'high':o.priority==='Mitjana'?'medium':'low'}">${o.priority||'Mitjana'}</span><span class="meta-chip">Revisió: ${o.review||'Temporada'}</span><span class="meta-chip">Pes ${o.weight}%</span></div><strong>${o.name}</strong><p>${o.detail}</p><div class="progress"><span style="width:${prog}%"></span></div><p>${prog}% · ${['Copa amb context'].includes(o.name)?'seguiment manual':'calculat automàticament'}</p></div><button class="icon-btn" onclick="removeItem('objectives',${i})">✕</button></div>`}).join('');$('#youthTable').innerHTML=state.youth.map((p,i)=>`<tr><td><strong>${p.name}</strong></td><td>${p.age}</td><td>${p.pos}</td><td>${p.origin}</td><td>${p.ovr}</td><td>${p.minutes||0}</td><td>${p.appearances||0}</td><td>${p.status}</td><td><button class="icon-btn" onclick="removeItem('youth',${i})">✕</button></td></tr>`).join('');$('#historyList').innerHTML=state.history.length?state.history.map(h=>`<div class="timeline-item"><strong>${h.season} · ${h.position}</strong><p>${h.summary}</p><small>Realism ${h.score}/100 · Net spend ${money(h.net)}</small></div>`).join(''):`<div class="timeline-item"><strong>Encara no hi ha temporades tancades</strong><p>Quan acabi el 2026/27 guardarem el resum aquí.</p></div>`;$('#rulesScoreBand').textContent=`${r.score} · ${r.band}`;$('#scoreBreakdown').innerHTML=r.breakdown.map(b=>`<div class="score-break-card ${b.lost?'penalty':'ok'}"><span>${b.cat.toUpperCase()}</span><strong>${b.score}/${b.weight}</strong><small>${b.lost?`-${b.lost} punts actius`:'Sense desviacions'}</small></div>`).join('');$('#rulesList').innerHTML=state.rules.map((x,i)=>`<div class="rule-card"><div class="rule-meta"><span class="meta-chip">${x[2]||'Projecte'}</span></div><strong>${i+1}. ${x[0]}</strong><p>${x[1]}</p></div>`).join('');
 bindSquadSortHeaders();renderProductCompletion(r);}
 
 function renderProductCompletion(r){
@@ -1126,7 +1233,7 @@ function renderProductCompletion(r){
   const done=setupItems.filter(([k])=>state.setup&&state.setup[k]).length,pct=Math.round(done/setupItems.length*100);
   $('#readinessPct').textContent=`${pct}%`;$('#readinessRing').style.background=`conic-gradient(var(--blue) 0 ${pct}%,#e8edf4 ${pct}% 100%)`;$('#setupStatus').textContent=pct===100?'READY':`${done}/${setupItems.length} COMPLET`;
   $('#setupChecklist').innerHTML=setupItems.map(([k,t,d])=>`<div class="setup-item"><button class="setup-check ${state.setup[k]?'done':''}" onclick="toggleSetup('${k}')">${state.setup[k]?'✓':''}</button><div><strong>${t}</strong><small>${d}</small></div><span>${state.setup[k]?'Fet':'Pendent'}</span></div>`).join('');
-  $('#setupSeason').value=state.season;$('#setupStage').value=state.projectStage;$('#setupClubStatus').value=state.clubStatus;$('#setupTarget').value=state.target;
+  $('#setupSeason').value=state.season;$('#setupStage').value=state.projectStage;$('#setupClubStatus').value=state.clubStatus;$('#setupTarget').value=state.target;if($('#setupTactic'))$('#setupTactic').value=state.tactic||'4-3-3';if($('#squadTacticSelect'))$('#squadTacticSelect').value=state.tactic||'4-3-3';
 }
 window.toggleSetup=k=>{state.setup[k]=!state.setup[k];save()};
 window.resolveDecision=i=>{const d=state.decisions[i];if(!d)return;modal('Resoldre decisió',[{label:'Resolució final',name:'resolution',type:'textarea',full:1,placeholder:'Què hem decidit i per què?'},{label:'Resultat',name:'outcome',type:'select',options:['Executada','Descartada','Ajornada','Substituïda']}],x=>{state.decisions[i]={...d,...x,status:'resolved',resolvedAt:new Date().toLocaleDateString('ca-ES')}})};
@@ -1364,7 +1471,7 @@ $('#editStandingsBtn').onclick=()=>modal('Actualitzar classificació',[{label:'E
 const addDecision=()=>modal('Nova decisió pendent',[{label:'Títol',name:'title',full:1},{label:'Tipus',name:'type',type:'select',options:['Mercat','Contracte','Plantilla','Cantera','Finances','Objectius','Projecte']},{label:'Context',name:'detail',type:'textarea',full:1,placeholder:'Què està passant i quina decisió hem de prendre?'},{label:'Recomanació inicial',name:'recommendation',full:1,optional:1},{label:'Data límit',name:'deadline',optional:1}],d=>state.decisions.unshift({...d,status:'open',createdAt:new Date().toLocaleDateString('ca-ES')}));$('#addDecisionBtn').onclick=addDecision;$('#addDecisionPageBtn').onclick=addDecision;
 window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
-$('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};
+$('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';save()};$('#analyzeSquadBtn').onclick=()=>{renderSquadAnalysis();$('#squadAnalysisPanel')?.scrollIntoView({behavior:'smooth',block:'start'});};
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
 ensureSquadIds();lastSquadFingerprint=squadFingerprint(state.squad);
 nav();render();renderSquadTablesOnly();setTimeout(renderSquadTablesOnly,50);
