@@ -2068,7 +2068,8 @@ setTimeout(()=>cloudLoad(),50);
         '<div class="metric-line"><span>Jugadors en propietat</span><strong>'+wageK(f.ownedWages)+'</strong></div>'+
         '<div class="metric-line"><span>Cessions entrants · cost Dépor</span><strong>'+wageK(f.incomingLoanWages)+'</strong></div>'+
         '<div class="metric-line"><span>Cedits fora · cost Dépor</span><strong>'+wageK(f.outgoingLoanWages)+'</strong></div>'+
-        '</div>';
+        '</div>'+
+        ((f.loanShares&&f.loanShares.length)?'<div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>Jugador</th><th>Tipus</th><th>% Dépor</th><th>Cost/set.</th></tr></thead><tbody>'+f.loanShares.map(x=>'<tr><td><strong>'+x.name+'</strong></td><td>'+x.ownership+'</td><td>'+x.share+'%</td><td>'+wageK(x.cost)+'</td></tr>').join('')+'</tbody></table></div>':'');
     }catch(e){console.error('finance snapshot sync',e)}
   }
   window.addEventListener('load',()=>{syncFinanceSnapshot();setTimeout(syncFinanceSnapshot,1200);});
