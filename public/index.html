@@ -306,7 +306,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
         <div><p class="eyebrow">SQUAD MANAGEMENT</p><h2>Plantilla</h2><p>OVR base FC27 vs OVR actual de la Career. Actualitza només quan el joc canviï la mitjana.</p></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button><button class="primary" id="addPlayerBtn">+ Afegir jugador</button></div>
       </div>
-      <div id="squadHydrationStatus" class="sync-banner">Carregant plantilla guardada…</div>
+      <div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div>
       <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
       <div class="loaned-out-section">
         <div class="subhead"><strong>CEDITS FORA</strong><span id="loanedOutCount">0 JUGADORS</span></div>
@@ -465,8 +465,20 @@ const DEFAULT_RULES=[
 ['Regla d’or','Podem fracassar. No reiniciem partits, no canviem normes per protegir resultats i acceptem conseqüències esportives i econòmiques.','Governança']
 ];
 const base={directorChat:[],season:'2026/27',position:'15è',target:'Permanència',clubStatus:4.6,projectStage:'Fase 1 · Supervivència',points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:12,budget:12,initialWages:240000,wages:240000,extraIncome:0},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
-let state=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(base);
+const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
+const serverBootState=window.__SERVER_STATE__&&typeof window.__SERVER_STATE__==='object'?window.__SERVER_STATE__:null;
+let state;
+if(localBootState&&serverBootState){
+  const byName=new Map();
+  for(const p of (serverBootState.squad||[])){const k=String(p?.name||'').trim().toLowerCase();if(k)byName.set(k,p);}
+  for(const p of (localBootState.squad||[])){const k=String(p?.name||'').trim().toLowerCase();if(k)byName.set(k,p);}
+  const localStamp=Number(localBootState._clientUpdatedAt||0),serverStamp=Number(serverBootState._clientUpdatedAt||0);
+  state={...(serverStamp>localStamp?serverBootState:localBootState),squad:[...byName.values()],_clientUpdatedAt:Math.max(localStamp,serverStamp)};
+}else{
+  state=localBootState||serverBootState||structuredClone(base);
+}
 state={...structuredClone(base),...state,directorChat:state.directorChat||[],finance:{...base.finance,...(state.finance||{})},setup:{...base.setup,...(state.setup||{})},shortlist:state.shortlist||[],latestAssessment:state.latestAssessment||null,matches:state.matches||[],nextMatch:{...base.nextMatch,...(state.nextMatch||{})},standings:state.standings||[],decisions:(state.decisions||[]).map(d=>({...d,status:d.status||'open',createdAt:d.createdAt||'',recommendation:d.recommendation||'',deadline:d.deadline||'',resolution:d.resolution||''})),reviews:state.reviews||[],points:Number(state.points||0)};
+localStorage.setItem(KEY,JSON.stringify(state));
 state.squad=(state.squad||[]).map(p=>{
   const baseOvr=num(p.baseOvr||p.ovr||p.currentOvr||0);
   const currentOvr=num(p.currentOvr||p.ovr||p.baseOvr||0);
@@ -564,7 +576,7 @@ function mergeSquadsSafe(localList,remoteList){
 async function cloudLoad(){
   const banner=$('#squadHydrationStatus');
   try{
-    if(banner){banner.textContent='Carregant plantilla guardada…';banner.className='sync-banner';}
+    if(banner && !(state.squad||[]).length){banner.textContent='Sincronitzant plantilla…';banner.className='sync-banner';}
     const r=await fetchWithTimeout('/api/state',{cache:'no-store'},6000);
     if(!r.ok) throw new Error('cloud unavailable '+r.status);
     const data=await r.json();
@@ -1345,7 +1357,15 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
-nav();render();renderSquadTablesOnly();setTimeout(renderSquadTablesOnly,50);cloudLoad();
+nav();render();renderSquadTablesOnly();setTimeout(renderSquadTablesOnly,50);
+const bootBanner=$('#squadHydrationStatus');
+if(bootBanner){
+  const bootSquad=(state.squad||[]);
+  bootBanner.textContent='Plantilla carregada · '+bootSquad.filter(p=>p.ownership!=='Cedit fora').length+' actius · '+bootSquad.filter(p=>p.ownership==='Cedit fora').length+' cedits fora';
+  bootBanner.className='sync-banner ok';
+  setTimeout(()=>bootBanner.classList.add('hidden'),1200);
+}
+setTimeout(()=>cloudLoad(),50);
 
 </script>
 </body>
