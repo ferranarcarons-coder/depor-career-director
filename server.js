@@ -71,6 +71,22 @@ async function initDb() {
       );
     }
   }
+  // 2026/27 finance baseline: EA already shows the spendable transfer budget.
+  const financeState = await pool.query('SELECT data FROM career_state WHERE id=$1', ['main']);
+  if (financeState.rowCount) {
+    const data = financeState.rows[0].data || {};
+    const finance = {...(data.finance || {})};
+    if (finance.budgetBaselineSeason !== '2026/27') {
+      finance.initialBudget = 11.304769;
+      finance.budgetSource = 'EA available transfer budget';
+      finance.budgetBaselineSeason = '2026/27';
+      data.finance = finance;
+      await pool.query(
+        'UPDATE career_state SET data=$2::jsonb, updated_at=NOW() WHERE id=$1',
+        ['main', JSON.stringify(data)]
+      );
+    }
+  }
   dbReady = true;
   return true;
 }
@@ -665,7 +681,7 @@ const server = http.createServer(async (req, res) => {
         await pool.query('ROLLBACK');
         throw e;
       }
-      return json(res,200,{ok:true,initialBudget,openingOperational:initialBudget*.70});
+      return json(res,200,{ok:true,initialBudget,openingOperational:initialBudget});
     }
 
     if (u.pathname === '/api/state' && req.method === 'GET') {
