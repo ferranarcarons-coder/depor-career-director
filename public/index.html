@@ -1226,7 +1226,7 @@ function transferFit(a){
 function renderTransferLab(){
  const box=$('#directorChatMessages'); if(!box)return;
  const history=state.directorChat||[];
- box.innerHTML=history.length?history.map(m=>'<div class="director-msg '+m.role+'">'+m.html+'</div>').join(''):'<div class="director-msg ai"><strong>Director esportiu</strong>Ja tinc el context del projecte. Em pots preguntar per un fitxatge, una oferta, una venda o una cessió. També et puc proposar candidats per posició.</div>';
+ box.innerHTML=history.length?history.map(m=>'<div class="director-msg '+m.role+'">'+m.html+'</div>').join(''):'<div class="director-msg ai"><strong>Director esportiu</strong>Ja tinc el context del projecte i de la plantilla. Em pots preguntar per renovacions, contractes, vendes, cessions, fitxatges, rols, minuts, jerarquia salarial o necessitats per posició. Mantinc el context de la conversa, així que pots fer seguiments sense repetir el jugador.</div>';
  box.scrollTop=box.scrollHeight;
  const incoming=state.transfers.filter(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)).length;
  const sales=state.transfers.filter(t=>t.type==='Venda').length;
@@ -1236,6 +1236,99 @@ function renderTransferLab(){
 }
 function normalizeDirectorText(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function findSquadPlayerFromText(text){const t=normalizeDirectorText(text);let best=null,bestScore=0;for(const p of state.squad){const n=normalizeDirectorText(p.name);if(n&&t.includes(n))return p;const tokens=n.split(/\s+/).filter(x=>x.length>=4);const score=tokens.filter(x=>t.includes(x)).length;if(score>bestScore){best=p;bestScore=score}}return bestScore?best:null}
+function stripDirectorHtml(v){const d=document.createElement('div');d.innerHTML=String(v||'');return d.textContent||d.innerText||''}
+function recentDirectorPlayer(currentText){
+  const direct=findSquadPlayerFromText(currentText);
+  if(direct)return direct;
+  const currentNorm=normalizeDirectorText(currentText);
+  let skippedCurrent=false;
+  const hist=[...(state.directorChat||[])].reverse();
+  for(const m of hist){
+    if(m.role!=='user')continue;
+    const plain=stripDirectorHtml(m.html||'');
+    const n=normalizeDirectorText(plain);
+    if(!skippedCurrent&&n===currentNorm){skippedCurrent=true;continue;}
+    const p=findSquadPlayerFromText(plain);
+    if(p)return p;
+  }
+  return null;
+}
+function directorIntent(text){
+  const t=normalizeDirectorText(text);
+  if(/renov|contracte|contrato|salari|sou|sueldo|prima/.test(t))return 'renew';
+  if(/vendre|venda|venta|vender|traspass|traspas|poso a la venta|poso a la venda/.test(t))return 'sell';
+  if(/cedir|cessio|cesion|prestamo/.test(t))return 'loan';
+  if(/alineacio|once|titular|banqueta|suplent|rol/.test(t))return 'role';
+  if(/fitx|fich|comprar|incorporar/.test(t))return 'sign';
+  if(/minuts|jugar|participacio|rendiment|performance/.test(t))return 'minutes';
+  return 'general';
+}
+function latestRenewalContextForPlayer(p){
+  const key=normalizeDirectorText(p?.name||'');
+  const hist=[...(state.directorChat||[])].reverse();
+  for(const m of hist){
+    if(m.role!=='user')continue;
+    const plain=stripDirectorHtml(m.html||'');
+    const t=normalizeDirectorText(plain);
+    if((t.includes(key)||findSquadPlayerFromText(plain)?.playerId===p.playerId)&&directorIntent(plain)==='renew'){
+      const terms=parseRenewalMoney(plain);
+      return {text:plain,...terms};
+    }
+  }
+  return null;
+}
+function directorSellFollowup(p,text){
+  const renewal=latestRenewalContextForPlayer(p);
+  const contract=num(p.contractYears),importance=playerImportance(p),value=num(p.value),age=num(p.age),wage=num(p.wage);
+  const sell=outgoingAdvice(p,'sell');
+  let decision='NO EL POSARIA A LA VENDA ENCARA',cls='warn';
+  let rationale=[];
+  if(contract<=1 && importance<55){
+    decision='SÍ, EL POSARIA A LA VENDA';
+    cls='good';
+    rationale.push('li queda només '+(contract||1)+' any de contracte');
+    rationale.push('el seu pes actual és baix ('+importance+'/100)');
+    if(renewal?.wage&&wage){
+      const rise=(renewal.wage-wage)/wage;
+      if(rise>.20)rationale.push('la renovació exigeix una pujada salarial del '+(rise*100).toFixed(0)+'%');
+    }
+  }else if(contract<=1 && importance>=70){
+    decision='NO: FARIA UN ÚLTIM INTENT DE RENOVACIÓ';
+    cls='warn';
+    rationale.push('el risc contractual és alt, però també ho és el seu pes esportiu ('+importance+'/100)');
+  }else if(sell.score>=60){
+    decision='SÍ, ESCOLTARIA OFERTES';
+    cls='good';
+    rationale.push('el context esportiu afavoreix una sortida');
+  }else{
+    rationale.push('no hi ha prou pressió esportiva ni contractual per forçar una venda');
+  }
+  let market='';
+  if(value>0){
+    const min=Math.max(value, value*1.05);
+    const target=value*1.15;
+    market='Amb valor actual '+valueMDisplay(value)+' M€, jo començaria demanant aproximadament '+valueMDisplay(target)+' M€ i no baixaria fàcilment de '+valueMDisplay(min)+' M€.';
+  }else{
+    market='No fixaria un preu objectiu fins tenir el valor actual del jugador.';
+  }
+  const context=renewal?.wage
+    ? 'Venim d’una renovació fallida a '+renewal.wage.toLocaleString('ca-ES')+' €/set.'+(renewal.bonus?' + '+renewal.bonus.toLocaleString('ca-ES')+' € de prima':'')+'. '
+    : '';
+  return {label:decision,cls,text:context+'La meva decisió seria aquesta perquè '+rationale.join(' · ')+'. '+market+(age>=30?' Amb '+age+' anys, encara més motiu per protegir valor de venda.':'')};
+}
+function directorRoleAdvice(p,text){
+  const imp=playerImportance(p),starter=lineupStarterIdSet().has(p.playerId),bench=lineupBenchIdSet().has(p.playerId);
+  const where=starter?'titular':bench?'banqueta principal':'fora de l’XI i la banqueta principal';
+  return {label:'DECISIÓ DE ROL',cls:starter?'good':'warn',text:p.name+' és '+where+', amb importància '+imp+'/100. '+(starter?'El mantindria com a peça principal mentre el rendiment aguanti.':bench?'El mantindria en rotació i revisaria minuts en 4-6 partits.':'Si no augmenta participació, valoraria cessió o venda segons edat i contracte.')};
+}
+function directorMinutesAdvice(p){
+  const mins=num(p.minutes),age=num(p.age),imp=playerImportance(p);
+  let advice='Mantindria el pla actual.';
+  if(age<=22&&mins<500)advice='Necessita més minuts: o entra de debò en la rotació o el cediria.';
+  else if(mins<500&&imp<50)advice='Té massa poc pes. Si no hi ha una raó tàctica clara, prepararia sortida.';
+  else if(mins>=1200)advice='Ja té participació útil; no prendria una decisió dràstica només pels minuts.';
+  return {label:'GESTIÓ DE MINUTS',cls:mins<500?'warn':'good',text:p.name+': '+mins+' minuts registrats · importància '+imp+'/100. '+advice};
+}
 function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return activeSquad().filter(x=>String(x.pos||'').toUpperCase()===pos).length}
 function extractOfferAmount(text){const s=String(text||'').replace(',','.');const m=s.match(/(\d+(?:\.\d+)?)\s*(?:m€|m eur|millones|milions|m\b)/i);return m?Number(m[1]):0}
 function parseRenewalMoney(text){
@@ -1254,50 +1347,28 @@ function parseRenewalMoney(text){
 }
 function renewalAdvice(p,text){
   const terms=parseRenewalMoney(text);
-  const currentWage=num(p.wage);
-  const w=wageContext();
-  const top=w.top||0;
-  const median=w.median||0;
-  const importance=playerImportance(p);
-  const contract=num(p.contractYears);
-  const age=num(p.age);
-  const requested=terms.wage;
-  const bonus=terms.bonus;
+  const currentWage=num(p.wage),w=wageContext(),top=w.top||0;
+  const importance=playerImportance(p),contract=num(p.contractYears),age=num(p.age);
+  const requested=terms.wage,bonus=terms.bonus;
   const wageRise=currentWage>0&&requested>0?(requested-currentWage)/currentWage:null;
   const hierarchy=requested>0&&top>0?requested/top:null;
   const bonusVsAnnual=requested>0&&bonus>0?bonus/(requested*52):null;
-  let score=50;
-  const positives=[],risks=[];
-  if(contract>0&&contract<=1){score+=18;positives.push('contracte en zona de risc');}
-  else if(contract>1&&contract<=2){score+=10;positives.push('és bon moment per renovar');}
-  if(importance>=70){score+=18;positives.push('pes esportiu alt');}
-  else if(importance>=55){score+=8;positives.push('pes esportiu útil');}
-  else {score-=8;risks.push('pes esportiu limitat');}
-  if(age>=30){score-=8;risks.push('edat que obliga a vigilar durada i cost');}
-  if(wageRise!==null){
-    if(wageRise<=.10){score+=12;positives.push('pujada salarial dins del marge');}
-    else if(wageRise<=.20){score+=2;risks.push('pujada salarial notable');}
-    else if(wageRise<=.35){score-=10;risks.push('pujada salarial alta');}
-    else {score-=22;risks.push('salt salarial excessiu');}
-  }
-  if(hierarchy!==null&&hierarchy>1.10){score-=25;risks.push('trenca la jerarquia salarial (>110% del top actual)');}
-  if(bonusVsAnnual!==null){
-    if(bonusVsAnnual<=.25){score+=3;}
-    else if(bonusVsAnnual<=.50){score-=4;risks.push('prima significativa');}
-    else {score-=10;risks.push('prima molt elevada respecte al salari anual');}
-  }
-  score=Math.max(0,Math.min(100,score));
-  let label='NEGOCIAR',cls='warn',decision='No acceptaria encara aquesta proposta tal com està.';
-  if(score>=72){label='RENOVAR';cls='good';decision='Renovaria, sempre que la durada del contracte sigui coherent amb l’edat i el rol.';}
-  else if(score<45){label='NO ACCEPTAR';cls='bad';decision='No acceptaria aquestes condicions. Forçaria una contraproposta clara o deixaria la renovació en pausa.';}
-  const details=[];
-  details.push('<strong>Recomanació:</strong> '+decision);
-  if(requested)details.push('Sou demanat: <strong>'+requested.toLocaleString('ca-ES')+' €/set.</strong>'+(currentWage?' vs '+currentWage.toLocaleString('ca-ES')+' € actuals ('+(wageRise>=0?'+':'')+(wageRise*100).toFixed(1)+'%)':''));
-  if(bonus)details.push('Prima: <strong>'+bonus.toLocaleString('ca-ES')+' €</strong>'+(bonusVsAnnual!==null?' · '+(bonusVsAnnual*100).toFixed(0)+'% del salari anual proposat':''));
-  details.push('Context: importància '+importance+'/100 · '+(contract?contract+' anys de contracte restants':'contracte pendent')+(top?' · top salarial actual '+top.toLocaleString('ca-ES')+' €/set.':''));
-  if(positives.length)details.push('<strong>A favor:</strong> '+positives.join(' · '));
-  if(risks.length)details.push('<strong>Riscos:</strong> '+risks.join(' · '));
-  return {label:label+' · '+score+'/100',cls,text:details.join('<br><br>')};
+  let accept=true,negotiate=false,reasons=[];
+  if(importance<50){accept=false;negotiate=true;reasons.push('el seu pes esportiu actual és baix ('+importance+'/100)');}
+  if(wageRise!==null&&wageRise>.20){accept=false;negotiate=true;reasons.push('la pujada salarial és del '+(wageRise*100).toFixed(0)+'%');}
+  if(hierarchy!==null&&hierarchy>1.10){accept=false;negotiate=false;reasons.push('trencaria la jerarquia salarial');}
+  if(age>=30&&contract>1){accept=false;negotiate=true;reasons.push('edat i durada exigeixen prudència');}
+  let label='RENOVARIA',cls='good',decision='Acceptaria la renovació.';
+  if(!accept&&negotiate){label='NEGOCIARIA, NO ACCEPTARIA ARA';cls='warn';decision='No acceptaria aquestes condicions. Faria una contraproposta i, si no baixa, prepararia una alternativa de mercat.';}
+  if(!accept&&!negotiate){label='NO ACCEPTARIA';cls='bad';decision='No acceptaria aquestes condicions.';}
+  const bits=[];
+  bits.push(decision);
+  if(requested&&currentWage)bits.push('Passar de '+currentWage.toLocaleString('ca-ES')+' a '+requested.toLocaleString('ca-ES')+' €/set. és '+(wageRise>=0?'+':'')+(wageRise*100).toFixed(1)+'%.');
+  if(bonus)bits.push('La prima de '+bonus.toLocaleString('ca-ES')+' € '+(bonusVsAnnual!==null?'equival a un '+(bonusVsAnnual*100).toFixed(0)+'% del salari anual proposat.':'és rellevant.'));
+  bits.push('Li queda '+(contract||'—')+' any(s) de contracte i té una importància interna de '+importance+'/100.');
+  if(reasons.length)bits.push('El que em preocupa és: '+reasons.join(' · ')+'.');
+  if(contract<=1&&importance<55)bits.push('Si no accepta una contraproposta raonable, jo sí que obriria la porta a vendre’l aquest estiu per no perdre valor.');
+  return {label,cls,text:bits.join(' ')};
 }
 function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('clave')||role.includes('clau'))pts+=22;else if(role.includes('importante')||role.includes('titular'))pts+=14;else if(role.includes('rotacion')||role.includes('rot')||role.includes('supl'))pts-=4;else if(role.includes('ocasional'))pts-=12;else if(role.includes('promesa'))pts-=6;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
 function outgoingAdvice(p,mode,offer=0){
@@ -1702,23 +1773,25 @@ function renderSquadAnalysis(scroll=false){
 }
 
 async function directorReply(text){
- const t=normalizeDirectorText(text),pos=positionFromText(text);
+ const t=normalizeDirectorText(text),pos=positionFromText(text),intent=directorIntent(text);
  if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica')){
    const a=deepSquadAnalysis();
-   return {label:'PLA DE PLANTILLA · '+a.overall+'/100',cls:a.overall>=80?'good':'warn',text:(a.execPlan||[]).map((x,i)=>(i+1)+'. <strong>'+x.title+'</strong> · '+x.detail).join('<br><br>')||'No detecto cap decisió urgent.'};
+   return {label:'PLA DE PLANTILLA · '+a.overall+'/100',cls:a.overall>=80?'good':'warn',text:(a.execPlan||[]).map((x,i)=>(i+1)+'. '+x.title+' · '+x.detail).join('<br><br>')||'No detecto cap decisió urgent.'};
  }
  if(pos&&(t.includes('busco')||t.includes('necessit')||t.includes('reforc')||t.includes('reforz')))return directorPositionAdvice(pos);
- const player=findSquadPlayerFromText(text);
- if(player&&(t.includes('renov')||t.includes('contracte')||t.includes('contrato')||t.includes('salari')||t.includes('sou')||t.includes('sueldo')||t.includes('prima')))return renewalAdvice(player,text);
+ const player=recentDirectorPlayer(text);
+ if(player&&intent==='renew')return renewalAdvice(player,text);
+ if(player&&intent==='sell')return directorSellFollowup(player,text);
+ if(player&&intent==='loan'){const a=outgoingAdvice(player,'loan');return {label:a.label+' · '+a.score+'/100',cls:a.cls,text:player.name+': '+a.text+'.'};}
+ if(player&&intent==='role')return directorRoleAdvice(player,text);
+ if(player&&intent==='minutes')return directorMinutesAdvice(player);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
- if((t.includes('cedir')||t.includes('cessio')||t.includes('cesion'))&&player){const a=outgoingAdvice(player,'loan');return {label:a.label+' · '+a.score+'/100',cls:a.cls,text:player.name+': '+a.text+'.'}}
- if((t.includes('vendre')||t.includes('vender')||t.includes('vendries')||t.includes('venderias'))&&player){const a=outgoingAdvice(player,'sell');return {label:a.label+' · '+a.score+'/100',cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
  if((t.includes('a qui')||t.includes('quien'))&&(t.includes('cedir')||t.includes('cessio')||t.includes('cesion')))return squadSellCandidates('loan');
- if((t.includes('a qui')||t.includes('quien'))&&(t.includes('vendre')||t.includes('vender')))return squadSellCandidates('sell');
+ if((t.includes('a qui')||t.includes('quien'))&&(t.includes('vendre')||t.includes('vender')||t.includes('venda')||t.includes('venta')))return squadSellCandidates('sell');
  if(t.includes('intocable')||t.includes('no tocaria vendre')){const list=[...state.squad].sort((a,b)=>playerImportance(b)-playerImportance(a)).slice(0,5);return {label:'INTOCABLES ACTUALS',cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · Importància '+playerImportance(p)+'/100 · OVR '+playerCareerOvr(p)).join('<br>')}}
- if(t.includes('fitx')||t.includes('fich')||t.includes('comprar'))return directorSigningAdvice(text);
- if(player)return {label:'ANÀLISI DE PLANTILLA',cls:'warn',text:'He identificat '+player.name+'. Digues-me si valores vendre’l, cedir-lo o si tens una oferta concreta.'};
- return {label:'NECESSITO MÉS CONTEXT',cls:'warn',text:'Prova: “Renovaries X per 21.500 €/set. + 200.000 € de prima?”, “Vendries X?”, “Cedim X?”, “M’ofereixen 12 M€ per X” o “Busco un central”.'};
+ if(intent==='sign')return directorSigningAdvice(text);
+ if(player)return {label:'DECISIÓ SOBRE '+player.name.toUpperCase(),cls:'warn',text:'Tinc el jugador identificat i també el context recent. Digues-me què vols decidir exactament: renovació, venda, cessió, rol o minuts.'};
+ return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Puc ajudar-te amb renovacions, vendes, cessions, fitxatges, rols, minuts, jerarquia salarial, contractes i necessitats de plantilla. Si és una continuació del tema anterior, no cal que repeteixis el jugador.'};
 }
 async function sendDirectorChat(textOverride){const input=$('#directorChatInput');const text=String(textOverride||input?.value||'').trim();if(!text)return;state.directorChat=state.directorChat||[];state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});if(input)input.value='';renderTransferLab();state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Analitzant el context…'});renderTransferLab();const i=state.directorChat.length-1;try{const a=await directorReply(text);state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text}}catch(e){state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'}}save()}
 function playerCareerOvr(p){return num(p.currentOvr||p.ovr||p.baseOvr||0)}
