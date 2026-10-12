@@ -802,6 +802,7 @@ const server = http.createServer(async (req, res) => {
       const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
       const playerId=crypto.randomUUID();
       const loan={
+        operationId:crypto.randomUUID(),
         player:String(body.player).trim(),
         playerId,
         type:'Cessió entrada',
@@ -858,6 +859,7 @@ const server = http.createServer(async (req, res) => {
       const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
       const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
       const loan={
+        operationId:crypto.randomUUID(),
         player:p.name||'Jugador',
         playerId,
         type:'Cessió sortida',
@@ -909,6 +911,7 @@ const server = http.createServer(async (req, res) => {
       const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
       const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
       const sale={
+        operationId:crypto.randomUUID(),
         player:p.name||'Jugador',
         playerId,
         type:'Venda',
@@ -950,6 +953,7 @@ const server = http.createServer(async (req, res) => {
       const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
       const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
       const normalized={...t,
+        operationId:String(t.operationId||crypto.randomUUID()),
         player:String(t.player||'').trim(),
         type:String(t.type||'').trim(),
         amount:Number(t.amount||0),
@@ -1074,6 +1078,32 @@ const server = http.createServer(async (req, res) => {
       if (!body || typeof body.state !== 'object') return json(res, 400, {error:'Estat no vàlid.'});
       const stateToSave={...body.state};
       delete stateToSave.squad;
+
+      // Transfer operations are append-only business records. A delayed/stale
+      // client autosave must never erase a sale/loan already committed by its
+      // dedicated endpoint.
+      const currentStateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const currentState=currentStateRow.rows[0]?.data&&typeof currentStateRow.rows[0].data==='object'
+        ? currentStateRow.rows[0].data : {};
+      const serverTransfers=Array.isArray(currentState.transfers)?currentState.transfers:[];
+      const incomingTransfers=Array.isArray(stateToSave.transfers)?stateToSave.transfers:[];
+      const transferKey=(t)=>{
+        if(t?.operationId)return 'id:'+String(t.operationId);
+        return [
+          String(t?.type||''),String(t?.playerId||''),String(t?.player||''),
+          String(t?.club||''),String(t?.amount??''),String(t?.createdAt||'')
+        ].join('|');
+      };
+      const mergedTransfers=[];
+      const seenTransfers=new Set();
+      for(const t of [...serverTransfers,...incomingTransfers]){
+        const key=transferKey(t);
+        if(seenTransfers.has(key))continue;
+        seenTransfers.add(key);
+        mergedTransfers.push(t);
+      }
+      stateToSave.transfers=mergedTransfers;
+
       await pool.query('BEGIN');
       try {
         await pool.query(
