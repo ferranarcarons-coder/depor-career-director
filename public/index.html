@@ -1874,7 +1874,7 @@ function renderDashboard(){const r=realism(),played=state.matches.length,totalPt
  const activePlayers=activeSquad();const scorer=activePlayers.slice().sort((a,b)=>num(b.goals)-num(a.goals))[0];const assister=activePlayers.slice().sort((a,b)=>num(b.assists)-num(a.assists))[0];$('#topScorer').textContent=scorer&&num(scorer.goals)>0?scorer.name:'—';$('#topGoals').textContent=`${scorer?num(scorer.goals):0} gols`;$('#topAssister').textContent=assister&&num(assister.assists)>0?assister.name:'—';$('#topAssists').textContent=`${assister?num(assister.assists):0} assist.`;
  // Director decisions
  const openDash=(state.decisions||[]).map((d,i)=>({...d,_i:i})).filter(d=>d.status!=='resolved');$('#decisionList').innerHTML=openDash.length?openDash.slice(0,4).map(d=>`<div class="decision-card"><span class="decision-icon">${d.type==='Mercat'?'↔':d.type==='Contracte'?'✎':'!'}</span><div><strong>${d.title}</strong><small>${d.detail||d.type}</small></div><button class="decision-done" onclick="completeDecision(${d._i})" title="Resoldre decisió">✓</button></div>`).join(''):`<div class="empty-inline">Cap decisió pendent. Afegeix aquí els temes que requereixen criteri de director esportiu.</div>`;
- const recent=state.matches.slice(-5);$('#formStrip').innerHTML=[...Array(5)].map((_,i)=>{const m=recent[i];return m?`<div class="form-result ${resultClass(m)}" title="${m.opponent}: ${m.gf}-${m.ga}">${resultLetter(m)}</div>`:'<div class="form-result">—</div>'}).join('');const fp=recent.reduce((a,m)=>a+matchPoints(m),0);$('#formPoints').textContent=`${fp}/${recent.length*3||15} PTS`;let fs='Sense dades',ft='Encara no hi ha partits registrats.',fc='neutral';if(recent.length){const ratio=fp/(recent.length*3);if(ratio>=.67){fs='Moment fort';ft='L’equip arriba amb una dinàmica positiva.';fc='good'}else if(ratio>=.4){fs='Forma estable';ft='Resultats suficients, però sense marge per relaxar-se.';fc='warning'}else{fs='Dinàmica delicada';ft='Cal revisar resultats i objectius immediats.';fc='bad'}}$('#formStatus').textContent=fs;$('#formText').textContent=ft;$('#formStatusDot').className=`status-dot ${fc}`;
+ const recent=state.matches.slice(-5);$('#formStrip').innerHTML=[...Array(5)].map((_,i)=>{const m=recent[i];if(!m)return '<div class="form-result">—</div>';const scorerText=Array.isArray(m.scorers)&&m.scorers.length?' · Gols: '+m.scorers.map(s=>s.name).join(', '):'';return `<div class="form-result ${resultClass(m)}" title="${m.opponent}: ${m.gf}-${m.ga}${scorerText}">${resultLetter(m)}</div>`}).join('');const fp=recent.reduce((a,m)=>a+matchPoints(m),0);$('#formPoints').textContent=`${fp}/${recent.length*3||15} PTS`;let fs='Sense dades',ft='Encara no hi ha partits registrats.',fc='neutral';if(recent.length){const ratio=fp/(recent.length*3);if(ratio>=.67){fs='Moment fort';ft='L’equip arriba amb una dinàmica positiva.';fc='good'}else if(ratio>=.4){fs='Forma estable';ft='Resultats suficients, però sense marge per relaxar-se.';fc='warning'}else{fs='Dinàmica delicada';ft='Cal revisar resultats i objectius immediats.';fc='bad'}}$('#formStatus').textContent=fs;$('#formText').textContent=ft;$('#formStatusDot').className=`status-dot ${fc}`;
  const groups={GK:0,DEF:0,MID:0,ATT:0};state.squad.forEach(p=>groups[positionGroup(p.pos)]++);const total=state.squad.length;$('#donutTotal').textContent=total;const cols=['#c5d0de','#7f8ba0','#62b3ff','#1765d8'];let acc=0,parts=[];Object.values(groups).forEach((v,i)=>{const pct=total?v/total*100:25;parts.push(`${cols[i]} ${acc}% ${acc+pct}%`);acc+=pct});$('#squadDonut').style.background=`conic-gradient(${parts.join(',')})`;$('#positionLegend').innerHTML=[['POR','GK','pos-gk'],['DEF','DEF','pos-def'],['MIG','MID','pos-mid'],['ATA','ATT','pos-att']].map(x=>`<div class="legend-row"><span><i class="legend-dot ${x[2]}"></i>${x[0]}</span><strong>${groups[x[1]]}</strong></div>`).join('');const ages=state.squad.map(p=>num(p.age)).filter(Boolean);$('#avgAge').textContent=ages.length?`${(ages.reduce((a,b)=>a+b,0)/ages.length).toFixed(1)} EDAT MITJANA`:'— EDAT MITJANA';const ageCounts=[ages.filter(a=>a<=21).length,ages.filter(a=>a>=22&&a<=28).length,ages.filter(a=>a>=29).length];$('#ageBands').innerHTML=[['U21',ageCounts[0]],['22–28',ageCounts[1]],['29+',ageCounts[2]]].map(x=>`<div class="age-band"><span>${x[0]}</span><strong>${x[1]} jug.</strong></div>`).join('');
  $('#transferCount').textContent=`${state.transfers.length} OPS`;$('#spendValue').textContent=money(r.spend);$('#salesValue').textContent=money(r.sales);const max=Math.max(r.spend,r.sales,1);$('#spendBar').style.width=`${r.spend/max*100}%`;$('#salesBar').style.width=`${r.sales/max*100}%`;$('#transferNetLarge').textContent=money(r.net);$('#transferVerdict').textContent=!state.transfers.length?'Mercat encara sense activitat':r.spend<=r.realBudget?'Dins del pressupost operatiu':'Pressupost realista superat';$('#recentTransfers').innerHTML=state.transfers.slice(-3).reverse().map(t=>`<div class="recent-transfer"><span><strong>${t.player}</strong> · ${t.type}</span><span>${money(t.amount)}</span></div>`).join('');
  $('#alertCount').textContent=`${r.alerts.filter(a=>a[0]!=='OK').length} ALERTES`;$('#priorityAlerts').innerHTML=r.alerts.slice(0,3).map(a=>`<div class="priority-card ${a[3]}"><span class="priority">${a[0]}</span><strong>${a[1]}</strong><small>${a[2]}</small></div>`).join('');const marketPenalty=r.penalties.filter(p=>p.cat==='Mercat').reduce((a,p)=>a+p.pts,0),identityPenalty=r.penalties.filter(p=>p.cat==='Identitat').reduce((a,p)=>a+p.pts,0);const health=[['Mercat',marketPenalty===0?'Controlat':marketPenalty<=3?'Vigilar':'En risc',marketPenalty===0?'green':marketPenalty<=3?'amber':'red'],['Escala salarial',r.wageGrowth<=.08?'Sana':r.wageGrowth<=.10?'Vigilar':'Fora de rang',r.wageGrowth<=.08?'green':r.wageGrowth<=.10?'amber':'red'],['Mida plantilla',!activeSquad().length?'Pendent':activeSquad().length>=22&&activeSquad().length<=25?'Correcta':'Revisar',!activeSquad().length?'amber':activeSquad().length>=22&&activeSquad().length<=25?'green':'amber'],['Identitat',identityPenalty?'En risc':'Coherent',identityPenalty?'amber':'green']];$('#healthList').innerHTML=health.map(x=>`<div class="health-item"><div class="health-label"><strong>${x[0]}</strong><small>Regles de la temporada</small></div><span class="pill ${x[2]}">${x[1]}</span></div>`).join('');}
@@ -2093,7 +2093,66 @@ function batchOvrUpdate(){
 }
 window.removeItem=(type,i)=>{if(confirm('Eliminar aquest registre?')){state[type].splice(i,1);save()}};
 function modal(title,fields,onSave){const dlg=$('#modal'),form=$('#modalForm');$('#modalContent').innerHTML=`<h2>${title}</h2><div class="modal-grid">${fields.map(f=>`<label class="${f.full?'full':''}">${f.label}${f.type==='select'?`<select name="${f.name}">${f.options.map(o=>`<option ${String(o)===String(f.value||'')?'selected':''}>${o}</option>`).join('')}</select>`:f.type==='textarea'?`<textarea name="${f.name}" rows="6" placeholder="${f.placeholder||''}" ${f.optional?'':'required'}>${f.value||''}</textarea>`:`<input name="${f.name}" type="${f.type||'text'}" value="${f.value||''}" ${f.placeholder?`placeholder="${f.placeholder}"`:''} ${f.step?`step="${f.step}"`:''} ${f.min!==undefined?`min="${f.min}"`:''} ${f.max!==undefined?`max="${f.max}"`:''} ${f.optional?'':'required'}>`}</label>`).join('')}</div>`;dlg.showModal();$('#modalCancel').onclick=()=>dlg.close('cancel');$('#modalSave').onclick=()=>{if(!form.reportValidity())return;const data=Object.fromEntries(new FormData(form).entries());const accepted=onSave(data);if(accepted===false)return;dlg.close('save');save();};dlg.onclick=e=>{if(e.target===dlg)dlg.close('cancel');};}
-$('#addMatchBtn').onclick=()=>modal('Registrar partit',[{label:'Rival',name:'opponent',full:1},{label:'Gols Dépor',name:'gf',type:'number',min:0},{label:'Gols rival',name:'ga',type:'number',min:0},{label:'Posició després del partit',name:'position',type:'number',min:1,max:20}],d=>state.matches.push({...d,gf:num(d.gf),ga:num(d.ga),position:num(d.position)}));
+function openMatchRegistration(){
+  const dlg=$('#modal'),form=$('#modalForm'),content=$('#modalContent');
+  const players=activeSquad().slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ca'));
+  const options=players.map(p=>'<option value="'+p.playerId+'">'+String(p.name||'Jugador').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</option>').join('');
+  content.innerHTML=
+    '<h2>Registrar partit</h2>'+
+    '<div class="modal-grid">'+
+      '<label class="full">Rival<input name="opponent" required></label>'+
+      '<label>Gols Dépor<input id="matchGoalsFor" name="gf" type="number" min="0" max="20" value="0" required></label>'+
+      '<label>Gols rival<input name="ga" type="number" min="0" max="20" value="0" required></label>'+
+      '<label>Posició després del partit<input name="position" type="number" min="1" max="20" required></label>'+
+      '<div class="full" id="matchScorersBlock"></div>'+
+    '</div>';
+  const gfInput=content.querySelector('#matchGoalsFor');
+  const scorerBlock=content.querySelector('#matchScorersBlock');
+  function renderScorers(){
+    const goals=Math.max(0,Math.min(20,Number(gfInput.value||0)));
+    if(!goals){
+      scorerBlock.innerHTML='<p class="helper" style="margin:0">Sense gols del Dépor en aquest partit.</p>';
+      return;
+    }
+    if(!players.length){
+      scorerBlock.innerHTML='<p class="helper" style="margin:0">No hi ha jugadors actius a la plantilla per assignar els golejadors.</p>';
+      return;
+    }
+    scorerBlock.innerHTML='<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'+
+      Array.from({length:goals},(_,i)=>'<label>Gol '+(i+1)+'<select name="scorer_'+i+'" required><option value="">Selecciona golejador</option>'+options+'</select></label>').join('')+
+      '</div>';
+  }
+  gfInput.addEventListener('input',renderScorers);
+  renderScorers();
+  dlg.showModal();
+  $('#modalCancel').onclick=()=>dlg.close('cancel');
+  $('#modalSave').onclick=()=>{
+    if(!form.reportValidity())return;
+    const data=Object.fromEntries(new FormData(form).entries());
+    const gf=Math.max(0,num(data.gf)),ga=Math.max(0,num(data.ga)),position=num(data.position);
+    const scorers=[];
+    for(let i=0;i<gf;i++){
+      const playerId=String(data['scorer_'+i]||'');
+      const p=state.squad.find(x=>x.playerId===playerId);
+      if(!p){alert('Selecciona el golejador de cada gol del Dépor.');return;}
+      scorers.push({playerId:p.playerId,name:p.name});
+    }
+    state.matches.push({
+      opponent:String(data.opponent||'').trim(),
+      gf,ga,position,
+      scorers,
+      createdAt:new Date().toISOString()
+    });
+    scorers.forEach(s=>{
+      const idx=state.squad.findIndex(p=>p.playerId===s.playerId);
+      if(idx>=0)state.squad[idx]={...state.squad[idx],goals:num(state.squad[idx].goals)+1};
+    });
+    dlg.close('save');
+    save();
+  };
+  dlg.onclick=e=>{if(e.target===dlg)dlg.close('cancel');};
+}
+$('#addMatchBtn').onclick=()=>openMatchRegistration();
 $('#batchOvrBtn').onclick=()=>batchOvrUpdate();
 $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[
  {label:'Nom',name:'name',full:1},
