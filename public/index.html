@@ -2289,6 +2289,8 @@ setTimeout(()=>cloudLoad(),50);
 <script>
 (function(){
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  let activeSort={key:'name',dir:1};
+  let loanSort={key:'name',dir:1};
   const n=v=>Number(v||0);
   const wage=v=>{const x=n(v)/1000;return Number.isInteger(x)?String(x):x.toFixed(1)};
   const value=v=>{const x=n(v);return x?String(Number(x.toFixed(3))):'0'};
@@ -2314,8 +2316,22 @@ setTimeout(()=>cloudLoad(),50);
       if(!r.ok)return;
       const out=await r.json();
       const squad=Array.isArray(out.squad)?out.squad:[];
-      const active=squad.filter(p=>p.ownership!=='Cedit fora').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ca'));
-      const loans=squad.filter(p=>p.ownership==='Cedit fora').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ca'));
+      const sortVal=(p,key)=>{
+        if(key==='baseOvr')return n(p.baseOvr||p.ovr||p.currentOvr);
+        if(key==='currentOvr')return n(p.currentOvr||p.ovr||p.baseOvr);
+        if(key==='delta')return n(p.currentOvr||p.ovr||p.baseOvr)-n(p.baseOvr||p.ovr||p.currentOvr);
+        if(key==='duration')return p.ownership==='Cedit al Dépor'?n(p.loanYears):n(p.contractYears);
+        if(key==='updated')return String(p.ovrUpdatedAt||'');
+        if(['age','value','wage','contractYears','loanYears','wageShareDepor','purchaseOptionValue'].includes(key))return n(p[key]);
+        return String(p[key]||'').toLocaleLowerCase('ca');
+      };
+      const sortList=(arr,sort)=>[...arr].sort((a,b)=>{
+        const av=sortVal(a,sort.key),bv=sortVal(b,sort.key);
+        if(typeof av==='number'&&typeof bv==='number')return (av-bv)*sort.dir;
+        return String(av).localeCompare(String(bv),'ca',{numeric:true,sensitivity:'base'})*sort.dir;
+      });
+      const active=sortList(squad.filter(p=>p.ownership!=='Cedit fora'),activeSort);
+      const loans=sortList(squad.filter(p=>p.ownership==='Cedit fora'),loanSort);
       activeBody.innerHTML=active.map((p,i)=>{
         const delta=n(p.currentOvr||p.ovr||p.baseOvr)-n(p.baseOvr||p.ovr||p.currentOvr);
         const duration=p.ownership==='Cedit al Dépor'
@@ -2358,6 +2374,26 @@ setTimeout(()=>cloudLoad(),50);
       const count=document.getElementById('loanedOutCount');if(count)count.textContent=loans.length+' JUGADOR'+(loans.length===1?'':'S');
       const banner=document.getElementById('squadHydrationStatus');
       if(banner){banner.textContent='Plantilla carregada · '+active.length+' actius · '+loans.length+' cedits fora';banner.className='sync-banner ok';}
+      document.querySelectorAll('[data-squad-sort]').forEach(th=>{
+        const key=th.dataset.squadSort;
+        th.classList.toggle('sort-asc',activeSort.key===key&&activeSort.dir===1);
+        th.classList.toggle('sort-desc',activeSort.key===key&&activeSort.dir===-1);
+        th.onclick=(e)=>{
+          e.preventDefault();e.stopPropagation();
+          if(activeSort.key===key)activeSort.dir*=-1;else activeSort={key,dir:1};
+          renderVisibleSquad();
+        };
+      });
+      document.querySelectorAll('[data-loan-sort]').forEach(th=>{
+        const key=th.dataset.loanSort;
+        th.classList.toggle('sort-asc',loanSort.key===key&&loanSort.dir===1);
+        th.classList.toggle('sort-desc',loanSort.key===key&&loanSort.dir===-1);
+        th.onclick=(e)=>{
+          e.preventDefault();e.stopPropagation();
+          if(loanSort.key===key)loanSort.dir*=-1;else loanSort={key,dir:1};
+          renderVisibleSquad();
+        };
+      });
     }catch(e){console.error('visible squad fallback',e)}
   }
   window.addEventListener('load',()=>{renderVisibleSquad();setTimeout(renderVisibleSquad,1000);});
