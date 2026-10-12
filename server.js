@@ -591,6 +591,11 @@ function serverLoanRow(p,i){
 async function serveIndex(res) {
   try {
     let html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+    // Compatibility shim: the legacy client script still binds #addTransferBtn.
+    // The visible Market UI now uses separate purchase/sale/loan buttons, but
+    // keeping a hidden legacy target prevents the old binding from aborting
+    // the rest of app initialization (including squad rendering).
+    html = html.replace('<body>', '<body><button id="addTransferBtn" type="button" style="display:none" aria-hidden="true" tabindex="-1"></button>');
     let initialState = null;
     let dedicatedSquad = [];
     if (dbReady) {
