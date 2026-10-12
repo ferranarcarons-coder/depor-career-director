@@ -441,7 +441,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 <p class="lab-note">El Director AI utilitza la teva plantilla, OVR Career, minuts, rols, contractes, salaris, Club Status, pressupost i normes actives. No registra cap operació automàticament.</p></article>
 <aside class="panel director-context-panel"><div class="panel-head"><div><p class="eyebrow">CONTEXT</p><h2>Projecte actual</h2></div><span>LIVE</span></div><div id="directorContextStats" class="director-context-stats"></div><div class="director-guidance"><strong>Em pots preguntar...</strong><p>• si un fitxatge és realista</p><p>• si acceptaria una oferta</p><p>• si vendria un jugador sense oferta</p><p>• si el cediria o me'l quedaria</p><p>• quines posicions reforçaria</p><p>• quins candidats són més realistes</p></div></aside></div></section>
 <section id="transfers" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">RECRUITMENT</p><h2>Mercat</h2><p>Compres i vendes separades. Les vendes es vinculen directament amb la plantilla.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="addPurchaseBtn">+ Compra / incorporació</button><button class="ghost-btn" id="addSaleBtn">+ Venda</button></div></div>
+      <div class="section-toolbar"><div><p class="eyebrow">RECRUITMENT</p><h2>Mercat</h2><p>Compres, vendes i cessions amb fluxos separats i vinculats a la plantilla.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="addPurchaseBtn">+ Compra</button><button class="ghost-btn" id="addSaleBtn">+ Venda</button><button class="ghost-btn" id="addLoanInBtn">+ Cessió entrant</button><button class="ghost-btn" id="addLoanOutBtn">+ Cessió sortint</button></div></div>
       <div id="transferSaveStatus" class="sync-banner hidden"></div>
       <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Tipus</th><th>Club</th><th>Import €M</th><th>Salari</th><th>Realism</th><th>Motiu</th><th></th></tr></thead><tbody id="transferTable"></tbody></table></div>
     </section>
@@ -486,6 +486,53 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button type="button" class="ghost-btn" id="cancelSale">Cancel·lar</button>
         <button type="submit" class="primary" id="saveSale">Confirmar venda</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+<dialog id="loanInDialog">
+  <form id="loanInForm" method="dialog">
+    <div class="modal-card">
+      <h2>Registrar cessió entrant</h2>
+      <div class="modal-grid">
+        <label class="full">Jugador<input name="player" required></label>
+        <label>Club propietari<input name="club" required></label>
+        <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
+        <label>Cost cessió €M<input name="amount" type="number" step="0.1" min="0" value="0"></label>
+        <label>Salari €/set.<input name="wage" type="number" min="0"></label>
+        <label>% salari que paga el Dépor<input name="wageShareDepor" type="number" min="0" max="100" step="1" value="100"></label>
+        <label>Durada cessió (anys)<input name="loanYears" type="number" min="0.5" max="5" step="0.5" value="1"></label>
+        <label>Opció de compra<select name="purchaseOptionType"><option>Sense opció</option><option>Opció de compra</option></select></label>
+        <label>Preu opció €M<input name="purchaseOptionValue" type="number" min="0" step="0.1"></label>
+        <label>Edat<input name="age" type="number" min="15" max="45"></label>
+        <label>OVR actual<input name="currentOvr" type="number" min="1" max="99"></label>
+        <label>Rol<select name="role"><option>Rotació</option><option>Titular</option><option>Aposta</option></select></label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button type="button" class="ghost-btn" id="cancelLoanIn">Cancel·lar</button>
+        <button type="submit" class="primary" id="saveLoanIn">Guardar cessió entrant</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="loanOutDialog">
+  <form id="loanOutForm" method="dialog">
+    <div class="modal-card">
+      <h2>Registrar cessió sortint</h2>
+      <div class="modal-grid">
+        <label class="full">Jugador de la plantilla<select name="playerId" id="loanOutPlayerSelect" required></select></label>
+        <label>Club destí<input name="club" required></label>
+        <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
+        <label>Ingressos cessió €M<input name="amount" type="number" step="0.1" min="0" value="0"></label>
+        <label>% salari que paga el Dépor<input name="wageShareDepor" type="number" min="0" max="100" step="1" value="0"></label>
+        <label>Durada cessió (anys)<input name="loanYears" type="number" min="0.5" max="5" step="0.5" value="1"></label>
+        <label>Opció de compra<select name="purchaseOptionType"><option>Sense opció</option><option>Opció de compra</option></select></label>
+        <label>Preu opció €M<input name="purchaseOptionValue" type="number" min="0" step="0.1"></label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button type="button" class="ghost-btn" id="cancelLoanOut">Cancel·lar</button>
+        <button type="submit" class="primary" id="saveLoanOut">Guardar cessió sortint</button>
       </div>
     </div>
   </form>
@@ -2126,10 +2173,16 @@ setTimeout(()=>cloudLoad(),50);
 (function(){
   const purchaseBtn=document.getElementById('addPurchaseBtn');
   const saleBtn=document.getElementById('addSaleBtn');
+  const loanInBtn=document.getElementById('addLoanInBtn');
+  const loanOutBtn=document.getElementById('addLoanOutBtn');
   const purchaseDlg=document.getElementById('purchaseDialog');
   const saleDlg=document.getElementById('saleDialog');
+  const loanInDlg=document.getElementById('loanInDialog');
+  const loanOutDlg=document.getElementById('loanOutDialog');
   const purchaseForm=document.getElementById('purchaseForm');
   const saleForm=document.getElementById('saleForm');
+  const loanInForm=document.getElementById('loanInForm');
+  const loanOutForm=document.getElementById('loanOutForm');
   const status=document.getElementById('transferSaveStatus');
 
   async function api(url,options){
@@ -2142,29 +2195,8 @@ setTimeout(()=>cloudLoad(),50);
     const b=document.getElementById(id);if(!b)return;
     b.disabled=busy;b.textContent=busy?'Guardant…':label;
   }
-
-  if(purchaseBtn&&purchaseDlg&&purchaseForm){
-    purchaseBtn.onclick=function(e){e.preventDefault();purchaseForm.reset();purchaseDlg.showModal();};
-    document.getElementById('cancelPurchase').onclick=()=>purchaseDlg.close();
-    purchaseForm.addEventListener('submit',async function(e){
-      e.preventDefault(); if(!purchaseForm.reportValidity())return;
-      const data=Object.fromEntries(new FormData(purchaseForm).entries());
-      ['amount','playerValue','wage','age'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
-      setBusy('savePurchase',true,'Guardar compra');
-      try{
-        await api('/api/transfers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transfer:data})});
-        if(status){status.className='sync-banner ok';status.textContent='Compra/incorporació guardada.';}
-        purchaseDlg.close();setTimeout(()=>window.location.reload(),200);
-      }catch(err){
-        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
-        setBusy('savePurchase',false,'Guardar compra');
-      }
-    });
-  }
-
-  async function loadSalePlayers(){
-    const sel=document.getElementById('salePlayerSelect');
-    if(!sel)return;
+  async function loadSquadSelect(id){
+    const sel=document.getElementById(id);if(!sel)return;
     sel.innerHTML='<option value="">Carregant plantilla…</option>';
     try{
       const out=await api('/api/squad',{cache:'no-store'});
@@ -2175,11 +2207,31 @@ setTimeout(()=>cloudLoad(),50);
     }
   }
 
+  if(purchaseBtn&&purchaseDlg&&purchaseForm){
+    purchaseBtn.onclick=function(e){e.preventDefault();purchaseForm.reset();purchaseDlg.showModal();};
+    document.getElementById('cancelPurchase').onclick=()=>purchaseDlg.close();
+    purchaseForm.addEventListener('submit',async function(e){
+      e.preventDefault();if(!purchaseForm.reportValidity())return;
+      const data=Object.fromEntries(new FormData(purchaseForm).entries());
+      data.type='Compra';
+      ['amount','playerValue','wage','age'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      setBusy('savePurchase',true,'Guardar compra');
+      try{
+        await api('/api/transfers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transfer:data})});
+        if(status){status.className='sync-banner ok';status.textContent='Compra guardada.';}
+        purchaseDlg.close();setTimeout(()=>window.location.reload(),200);
+      }catch(err){
+        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        setBusy('savePurchase',false,'Guardar compra');
+      }
+    });
+  }
+
   if(saleBtn&&saleDlg&&saleForm){
-    saleBtn.onclick=async function(e){e.preventDefault();saleForm.reset();await loadSalePlayers();saleDlg.showModal();};
+    saleBtn.onclick=async function(e){e.preventDefault();saleForm.reset();await loadSquadSelect('salePlayerSelect');saleDlg.showModal();};
     document.getElementById('cancelSale').onclick=()=>saleDlg.close();
     saleForm.addEventListener('submit',async function(e){
-      e.preventDefault(); if(!saleForm.reportValidity())return;
+      e.preventDefault();if(!saleForm.reportValidity())return;
       const data=Object.fromEntries(new FormData(saleForm).entries());
       ['amount','buyerLevel','contractYears'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
       if(!confirm('Confirmes la venda? El jugador s’eliminarà automàticament de la plantilla.'))return;
@@ -2191,6 +2243,44 @@ setTimeout(()=>cloudLoad(),50);
       }catch(err){
         if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
         setBusy('saveSale',false,'Confirmar venda');
+      }
+    });
+  }
+
+  if(loanInBtn&&loanInDlg&&loanInForm){
+    loanInBtn.onclick=function(e){e.preventDefault();loanInForm.reset();loanInDlg.showModal();};
+    document.getElementById('cancelLoanIn').onclick=()=>loanInDlg.close();
+    loanInForm.addEventListener('submit',async function(e){
+      e.preventDefault();if(!loanInForm.reportValidity())return;
+      const data=Object.fromEntries(new FormData(loanInForm).entries());
+      ['amount','wage','wageShareDepor','loanYears','purchaseOptionValue','age','currentOvr'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      setBusy('saveLoanIn',true,'Guardar cessió entrant');
+      try{
+        await api('/api/transfers/loan-in',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        if(status){status.className='sync-banner ok';status.textContent='Cessió entrant registrada i jugador afegit a la plantilla.';}
+        loanInDlg.close();setTimeout(()=>window.location.reload(),200);
+      }catch(err){
+        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        setBusy('saveLoanIn',false,'Guardar cessió entrant');
+      }
+    });
+  }
+
+  if(loanOutBtn&&loanOutDlg&&loanOutForm){
+    loanOutBtn.onclick=async function(e){e.preventDefault();loanOutForm.reset();await loadSquadSelect('loanOutPlayerSelect');loanOutDlg.showModal();};
+    document.getElementById('cancelLoanOut').onclick=()=>loanOutDlg.close();
+    loanOutForm.addEventListener('submit',async function(e){
+      e.preventDefault();if(!loanOutForm.reportValidity())return;
+      const data=Object.fromEntries(new FormData(loanOutForm).entries());
+      ['amount','wageShareDepor','loanYears','purchaseOptionValue'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      setBusy('saveLoanOut',true,'Guardar cessió sortint');
+      try{
+        await api('/api/transfers/loan-out',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        if(status){status.className='sync-banner ok';status.textContent='Cessió sortint registrada i jugador mogut a cedits fora.';}
+        loanOutDlg.close();setTimeout(()=>window.location.reload(),200);
+      }catch(err){
+        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        setBusy('saveLoanOut',false,'Guardar cessió sortint');
       }
     });
   }
