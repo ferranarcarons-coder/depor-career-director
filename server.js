@@ -31,6 +31,12 @@ async function initDb() {
       data JSONB NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS career_state_history (
+      version_id BIGSERIAL PRIMARY KEY,
+      state_id TEXT NOT NULL,
+      data JSONB NOT NULL,
+      saved_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS player_cache (
       cache_key TEXT PRIMARY KEY,
       payload JSONB NOT NULL,
@@ -530,13 +536,45 @@ const server = http.createServer(async (req, res) => {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const body = await readBody(req);
       if (!body || typeof body.state !== 'object') return json(res, 400, {error:'Estat no vàlid.'});
-      await pool.query(
-        `INSERT INTO career_state(id,data,updated_at)
-         VALUES($1,$2::jsonb,NOW())
-         ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
-        ['main', JSON.stringify(body.state)]
-      );
+      await pool.query('BEGIN');
+      try {
+        await pool.query(
+          'INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',
+          ['main', JSON.stringify(body.state)]
+        );
+        await pool.query(
+          `INSERT INTO career_state(id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data, updated_at=NOW()`,
+          ['main', JSON.stringify(body.state)]
+        );
+        await pool.query(
+          `DELETE FROM career_state_history
+           WHERE state_id=$1 AND version_id NOT IN (
+             SELECT version_id FROM career_state_history WHERE state_id=$1 ORDER BY version_id DESC LIMIT 50
+           )`,
+          ['main']
+        );
+        await pool.query('COMMIT');
+      } catch (e) {
+        await pool.query('ROLLBACK');
+        throw e;
+      }
       return json(res, 200, {ok:true});
+    }
+
+    if (u.pathname === '/api/state/history' && req.method === 'GET') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const r = await pool.query(
+        `SELECT version_id, saved_at,
+                jsonb_array_length(COALESCE(data->'squad','[]'::jsonb)) AS squad_count
+         FROM career_state_history
+         WHERE state_id=$1
+         ORDER BY version_id DESC
+         LIMIT 20`,
+        ['main']
+      );
+      return json(res, 200, {versions:r.rows}, 'no-store');
     }
 
     if (u.pathname === '/api/players/search') {
