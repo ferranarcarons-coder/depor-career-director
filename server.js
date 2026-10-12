@@ -780,6 +780,38 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/transfers' && req.method === 'POST') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      const t=body?.transfer;
+      if(!t || !String(t.player||'').trim() || !String(t.type||'').trim()) return json(res,400,{error:'Falten jugador o tipus d’operació.'});
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
+      const transfers=Array.isArray(stateData.transfers)?[...stateData.transfers]:[];
+      const normalized={...t,
+        player:String(t.player||'').trim(),
+        type:String(t.type||'').trim(),
+        amount:Number(t.amount||0),
+        playerValue:Number(t.playerValue||0),
+        wage:Number(t.wage||0),
+        age:Number(t.age||0),
+        createdAt:new Date().toISOString()
+      };
+      transfers.push(normalized);
+      stateData.transfers=transfers;
+      stateData._clientUpdatedAt=Date.now();
+      await pool.query('BEGIN');
+      try{
+        await pool.query('INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',['main',JSON.stringify(stateData)]);
+        await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(stateData)]);
+        await pool.query('COMMIT');
+      }catch(e){
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+      return json(res,200,{ok:true,transfer:normalized,count:transfers.length});
+    }
+
     if (u.pathname === '/api/finance/snapshot' && req.method === 'GET') {
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
