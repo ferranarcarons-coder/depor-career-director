@@ -607,6 +607,10 @@ const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, 'http://localhost');
 
+    if (u.pathname === '/version') {
+      return json(res,200,{build:'2026-10-12-1119',commit:'d589799d0f8d19b64dec5ae20d00b0e5a86c52eb'});
+    }
+
     if (u.pathname === '/health') {
       return json(res, 200, {
         ok:true,
@@ -777,6 +781,17 @@ const server = http.createServer(async (req, res) => {
       const payload = {player};
       await writeCache(cacheKey, payload);
       return json(res, 200, payload, 'public, max-age=86400');
+    }
+
+    if (u.pathname === '/latest') {
+      try {
+        let html = await fs.promises.readFile(path.join(PUBLIC_DIR,'index.html'),'utf8');
+        html = html.replace('<body>','<body><div style="position:sticky;top:0;z-index:99999;background:#0f2747;color:white;padding:8px 12px;font:700 12px Arial;text-align:center">BUILD ACTUAL · FINANCES + CANTERA · d589799</div>');
+        res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store, no-cache, must-revalidate, max-age=0','pragma':'no-cache','expires':'0'});
+        return res.end(html);
+      } catch (e) {
+        return json(res,500,{error:'No s’ha pogut carregar /latest'});
+      }
     }
 
     return await serveIndex(res);
