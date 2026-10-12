@@ -504,12 +504,23 @@ async function searchPlayers(q) {
   return [];
 }
 
-function serveIndex(res) {
-  fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (err, data) => {
-    if (err) return json(res, 500, {error:'No s’ha pogut carregar la interfície.'});
-    res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-cache'});
-    res.end(data);
-  });
+async function serveIndex(res) {
+  try {
+    let html = await fs.promises.readFile(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+    let initialState = null;
+    if (dbReady) {
+      try {
+        const r = await pool.query('SELECT data FROM career_state WHERE id = $1', ['main']);
+        if (r.rowCount) initialState = r.rows[0].data;
+      } catch (e) {}
+    }
+    const safeState = JSON.stringify(initialState).replace(/</g, '\\u003c');
+    html = html.replace('<script>', '<script>window.__SERVER_STATE__='+safeState+';<\/script><script>');
+    res.writeHead(200, {'content-type':'text/html; charset=utf-8','cache-control':'no-store, no-cache, must-revalidate'});
+    res.end(html);
+  } catch (err) {
+    return json(res, 500, {error:'No s’ha pogut carregar la interfície.'});
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -616,7 +627,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, payload, 'public, max-age=86400');
     }
 
-    return serveIndex(res);
+    return await serveIndex(res);
   } catch (e) {
     return json(res, 502, {
       error:'No s’ha pogut completar la consulta.',
