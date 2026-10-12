@@ -441,35 +441,55 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 <p class="lab-note">El Director AI utilitza la teva plantilla, OVR Career, minuts, rols, contractes, salaris, Club Status, pressupost i normes actives. No registra cap operació automàticament.</p></article>
 <aside class="panel director-context-panel"><div class="panel-head"><div><p class="eyebrow">CONTEXT</p><h2>Projecte actual</h2></div><span>LIVE</span></div><div id="directorContextStats" class="director-context-stats"></div><div class="director-guidance"><strong>Em pots preguntar...</strong><p>• si un fitxatge és realista</p><p>• si acceptaria una oferta</p><p>• si vendria un jugador sense oferta</p><p>• si el cediria o me'l quedaria</p><p>• quines posicions reforçaria</p><p>• quins candidats són més realistes</p></div></aside></div></section>
 <section id="transfers" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">RECRUITMENT</p><h2>Mercat</h2><p>Registre de les operacions executades. El realisme es valida abans al Transfer Lab.</p></div><button class="primary" id="addTransferBtn">+ Registrar operació</button></div>
+      <div class="section-toolbar"><div><p class="eyebrow">RECRUITMENT</p><h2>Mercat</h2><p>Compres i vendes separades. Les vendes es vinculen directament amb la plantilla.</p></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="primary" id="addPurchaseBtn">+ Compra / incorporació</button><button class="ghost-btn" id="addSaleBtn">+ Venda</button></div></div>
       <div id="transferSaveStatus" class="sync-banner hidden"></div>
       <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Tipus</th><th>Club</th><th>Import €M</th><th>Salari</th><th>Realism</th><th>Motiu</th><th></th></tr></thead><tbody id="transferTable"></tbody></table></div>
     </section>
-    <dialog id="transferQuickDialog">
-      <form id="transferQuickForm" method="dialog">
-        <div class="modal-card">
-          <h2>Registrar operació</h2>
-          <div class="modal-grid">
-            <label class="full">Jugador<input name="player" required></label>
-            <label>Tipus<select name="type"><option>Compra</option><option>Venda</option><option>Cessió entrada</option><option>Cessió sortida</option><option>Agent lliure</option><option>Oferta rebutjada</option></select></label>
-            <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
-            <label>Club origen/destí<input name="club"></label>
-            <label>Import / oferta €M<input name="amount" type="number" step="0.1" min="0" required></label>
-            <label>Valor actual jugador €M<input name="playerValue" type="number" step="0.1" min="0"></label>
-            <label>Salari €/set.<input name="wage" type="number" min="0"></label>
-            <label>Edat<input name="age" type="number" min="15" max="45"></label>
-            <label>Rol<select name="role"><option>Rotació</option><option>Titular</option><option>Aposta</option><option>No aplica</option></select></label>
-            <label>Mercat<select name="market"><option>Espanya</option><option>Portugal</option><option>Iberoamèrica</option><option>Altres</option><option>No aplica</option></select></label>
-            <label>Context<select name="context"><option>Normal</option><option>Lesió greu</option><option>Venda prèvia</option><option>Necessitat crítica</option><option>Oportunitat excepcional</option></select></label>
-            <label class="full">Justificació / context<input name="reason"></label>
-          </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
-            <button type="button" class="ghost-btn" id="cancelTransferQuick">Cancel·lar</button>
-            <button type="submit" class="primary" id="saveTransferQuick">Guardar operació</button>
-          </div>
-        </div>
-      </form>
-    </dialog>
+    <dialog id="purchaseDialog">
+  <form id="purchaseForm" method="dialog">
+    <div class="modal-card">
+      <h2>Registrar compra / incorporació</h2>
+      <div class="modal-grid">
+        <label class="full">Jugador<input name="player" required></label>
+        <label>Tipus<select name="type"><option>Compra</option><option>Cessió entrada</option><option>Agent lliure</option></select></label>
+        <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
+        <label>Club origen<input name="club"></label>
+        <label>Import €M<input name="amount" type="number" step="0.1" min="0" required></label>
+        <label>Valor actual €M<input name="playerValue" type="number" step="0.1" min="0"></label>
+        <label>Salari €/set.<input name="wage" type="number" min="0"></label>
+        <label>Edat<input name="age" type="number" min="15" max="45"></label>
+        <label>Rol<select name="role"><option>Rotació</option><option>Titular</option><option>Aposta</option><option>No aplica</option></select></label>
+        <label>Mercat<select name="market"><option>Espanya</option><option>Portugal</option><option>Iberoamèrica</option><option>Altres</option></select></label>
+        <label class="full">Justificació / context<input name="reason"></label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button type="button" class="ghost-btn" id="cancelPurchase">Cancel·lar</button>
+        <button type="submit" class="primary" id="savePurchase">Guardar compra</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="saleDialog">
+  <form id="saleForm" method="dialog">
+    <div class="modal-card">
+      <h2>Registrar venda</h2>
+      <div class="modal-grid">
+        <label class="full">Jugador de la plantilla<select name="playerId" id="salePlayerSelect" required></select></label>
+        <label>Finestra<select name="window"><option>Estiu</option><option>Hivern</option></select></label>
+        <label>Club comprador<input name="club"></label>
+        <label>Import venda €M<input name="amount" type="number" step="0.1" min="0" required></label>
+        <label>Club comprador (1-10)<input name="buyerLevel" type="number" min="1" max="10" step="0.1"></label>
+        <label>Anys contracte restants<input name="contractYears" type="number" min="0" max="6" step="0.5"></label>
+        <label class="full">Motiu / context<input name="reason"></label>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+        <button type="button" class="ghost-btn" id="cancelSale">Cancel·lar</button>
+        <button type="submit" class="primary" id="saveSale">Confirmar venda</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 
     <section id="finance" class="view">
       <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Pressupost EA actual després dels canvis de staff: <strong>11.613.983 €</strong>. A partir d'aquí l'eina calcula mercat i massa salarial de jugadors.</p></div></div>
@@ -2104,33 +2124,76 @@ setTimeout(()=>cloudLoad(),50);
 </script>
 <script>
 (function(){
-  const btn=document.getElementById('addTransferBtn');
-  const dlg=document.getElementById('transferQuickDialog');
-  const form=document.getElementById('transferQuickForm');
-  const cancel=document.getElementById('cancelTransferQuick');
+  const purchaseBtn=document.getElementById('addPurchaseBtn');
+  const saleBtn=document.getElementById('addSaleBtn');
+  const purchaseDlg=document.getElementById('purchaseDialog');
+  const saleDlg=document.getElementById('saleDialog');
+  const purchaseForm=document.getElementById('purchaseForm');
+  const saleForm=document.getElementById('saleForm');
   const status=document.getElementById('transferSaveStatus');
-  if(!btn||!dlg||!form)return;
-  btn.onclick=function(e){e.preventDefault();form.reset();dlg.showModal();};
-  if(cancel)cancel.onclick=function(){dlg.close();};
-  form.addEventListener('submit',async function(e){
-    e.preventDefault();
-    if(!form.reportValidity())return;
-    const data=Object.fromEntries(new FormData(form).entries());
-    ['amount','playerValue','wage','age'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
-    const saveBtn=document.getElementById('saveTransferQuick');
-    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Guardant…';}
+
+  async function api(url,options){
+    const r=await fetch(url,options);
+    const out=await r.json();
+    if(!r.ok)throw new Error(out.error||('HTTP '+r.status));
+    return out;
+  }
+  function setBusy(id,busy,label){
+    const b=document.getElementById(id);if(!b)return;
+    b.disabled=busy;b.textContent=busy?'Guardant…':label;
+  }
+
+  if(purchaseBtn&&purchaseDlg&&purchaseForm){
+    purchaseBtn.onclick=function(e){e.preventDefault();purchaseForm.reset();purchaseDlg.showModal();};
+    document.getElementById('cancelPurchase').onclick=()=>purchaseDlg.close();
+    purchaseForm.addEventListener('submit',async function(e){
+      e.preventDefault(); if(!purchaseForm.reportValidity())return;
+      const data=Object.fromEntries(new FormData(purchaseForm).entries());
+      ['amount','playerValue','wage','age'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      setBusy('savePurchase',true,'Guardar compra');
+      try{
+        await api('/api/transfers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transfer:data})});
+        if(status){status.className='sync-banner ok';status.textContent='Compra/incorporació guardada.';}
+        purchaseDlg.close();setTimeout(()=>window.location.reload(),200);
+      }catch(err){
+        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        setBusy('savePurchase',false,'Guardar compra');
+      }
+    });
+  }
+
+  async function loadSalePlayers(){
+    const sel=document.getElementById('salePlayerSelect');
+    if(!sel)return;
+    sel.innerHTML='<option value="">Carregant plantilla…</option>';
     try{
-      const r=await fetch('/api/transfers',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({transfer:data})});
-      const out=await r.json();
-      if(!r.ok)throw new Error(out.error||('HTTP '+r.status));
-      if(status){status.className='sync-banner ok';status.textContent='Operació guardada correctament.';}
-      dlg.close();
-      setTimeout(()=>window.location.reload(),250);
+      const out=await api('/api/squad',{cache:'no-store'});
+      const players=(out.squad||[]).filter(p=>p.ownership!=='Cedit fora');
+      sel.innerHTML='<option value="">Selecciona jugador</option>'+players.map(p=>'<option value="'+p.playerId+'">'+p.name+' · '+(p.pos||'—')+' · '+(p.currentOvr||p.ovr||p.baseOvr||'—')+' OVR</option>').join('');
     }catch(err){
-      if(status){status.className='sync-banner warn';status.textContent='Error guardant operació: '+err.message;}
-      if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Guardar operació';}
+      sel.innerHTML='<option value="">No s’ha pogut carregar la plantilla</option>';
     }
-  });
+  }
+
+  if(saleBtn&&saleDlg&&saleForm){
+    saleBtn.onclick=async function(e){e.preventDefault();saleForm.reset();await loadSalePlayers();saleDlg.showModal();};
+    document.getElementById('cancelSale').onclick=()=>saleDlg.close();
+    saleForm.addEventListener('submit',async function(e){
+      e.preventDefault(); if(!saleForm.reportValidity())return;
+      const data=Object.fromEntries(new FormData(saleForm).entries());
+      ['amount','buyerLevel','contractYears'].forEach(k=>{if(data[k]!=='')data[k]=Number(String(data[k]).replace(',','.'));});
+      if(!confirm('Confirmes la venda? El jugador s’eliminarà automàticament de la plantilla.'))return;
+      setBusy('saveSale',true,'Confirmar venda');
+      try{
+        await api('/api/transfers/sale',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
+        if(status){status.className='sync-banner ok';status.textContent='Venda registrada i jugador eliminat de la plantilla.';}
+        saleDlg.close();setTimeout(()=>window.location.reload(),200);
+      }catch(err){
+        if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        setBusy('saveSale',false,'Confirmar venda');
+      }
+    });
+  }
 })();
 </script>
 </body>
