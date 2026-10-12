@@ -175,6 +175,21 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 .lineup-summary{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0;display:grid;gap:8px;font-size:11px;color:var(--muted)}
 @media(max-width:1050px){.lineup-layout{grid-template-columns:1fr}.football-pitch{min-height:640px}}
 @media(max-width:620px){.football-pitch{min-height:580px}.pitch-slot{width:118px}.pitch-player-card{padding:6px}.pitch-player-card select{font-size:9px}}
+
+.analysis-decision-board{display:grid;gap:12px;margin-top:12px}
+.analysis-section{border:1px solid #e2e8f0;border-radius:12px;background:#fff;overflow:hidden}
+.analysis-section-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #edf1f5}
+.analysis-section-head h3{margin:0;font-size:13px}
+.analysis-table{width:100%;border-collapse:collapse}
+.analysis-table th,.analysis-table td{padding:9px 10px;border-bottom:1px solid #edf1f5;font-size:10px;text-align:left;vertical-align:top}
+.analysis-table th{font-size:8px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.analysis-table tr:last-child td{border-bottom:0}
+.action-chip{display:inline-flex;padding:4px 7px;border-radius:999px;font-size:8px;font-weight:900;letter-spacing:.04em}
+.action-chip.keep{background:#eaf7ef;color:#27734a}.action-chip.renew{background:#eaf2ff;color:#275fa7}.action-chip.sell{background:#fff0f0;color:#a13c3c}.action-chip.loan{background:#fff6df;color:#8a6400}.action-chip.review{background:#f3efff;color:#6550a5}
+.priority-rank{display:inline-flex;width:22px;height:22px;border-radius:50%;align-items:center;justify-content:center;background:#eef3f8;font-size:9px;font-weight:900}
+.exec-plan{display:grid;gap:8px;padding:12px}
+.exec-plan-item{display:grid;grid-template-columns:28px 1fr;gap:9px;align-items:start;padding:9px;border:1px solid #edf1f5;border-radius:10px;background:#fafcff}
+.exec-plan-item strong{font-size:10px}.exec-plan-item p{margin:3px 0 0;font-size:10px;line-height:1.45;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -999,7 +1014,7 @@ function renderTransferLab(){
 }
 function normalizeDirectorText(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function findSquadPlayerFromText(text){const t=normalizeDirectorText(text);let best=null,bestScore=0;for(const p of state.squad){const n=normalizeDirectorText(p.name);if(n&&t.includes(n))return p;const tokens=n.split(/\s+/).filter(x=>x.length>=4);const score=tokens.filter(x=>t.includes(x)).length;if(score>bestScore){best=p;bestScore=score}}return bestScore?best:null}
-function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return state.squad.filter(x=>String(x.pos||'').toUpperCase()===pos).length}
+function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return activeSquad().filter(x=>String(x.pos||'').toUpperCase()===pos).length}
 function extractOfferAmount(text){const s=String(text||'').replace(',','.');const m=s.match(/(\d+(?:\.\d+)?)\s*(?:m€|m eur|millones|milions|m\b)/i);return m?Number(m[1]):0}
 function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('clave')||role.includes('clau'))pts+=22;else if(role.includes('importante')||role.includes('titular'))pts+=14;else if(role.includes('rotacion')||role.includes('rot')||role.includes('supl'))pts-=4;else if(role.includes('ocasional'))pts-=12;else if(role.includes('promesa'))pts-=6;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
 function outgoingAdvice(p,mode,offer=0){
@@ -1112,6 +1127,81 @@ function emotionalFitAnalysis(){
   const depor=linked.filter(p=>normalizeDirectorText(p.favoriteClub).includes('depor'));
   return {known:linked.length,depor:depor.length,names:depor.map(p=>p.name)};
 }
+function tacticalPositionPlan(){
+  const tactic=state.tactic||'4-3-3',slots=formationSlots(tactic),xi=buildBestXI(),squad=activeSquad();
+  const groups=[];const seen=new Set();
+  slots.forEach((slot,i)=>{
+    if(seen.has(slot))return;seen.add(slot);
+    const needCount=slots.filter(s=>s===slot).length;
+    const starters=xi.filter(x=>x.slot===slot&&x.p).map(x=>x.p);
+    const compatible=squad.filter(p=>positionFitsSlot(p.pos,slot)).sort((a,b)=>playerCareerOvr(b)-playerCareerOvr(a));
+    const starterIds=new Set(starters.map(p=>p.playerId));
+    const backups=compatible.filter(p=>!starterIds.has(p.playerId));
+    const starterAvg=starters.length?starters.reduce((a,p)=>a+playerCareerOvr(p),0)/starters.length:0;
+    const backupTop=backups[0]?playerCareerOvr(backups[0]):0;
+    let urgency=0;const reasons=[];
+    if(starters.length<needCount){urgency+=55;reasons.push('falta titular natural');}
+    if(backups.length<1){urgency+=25;reasons.push('sense recanvi clar');}
+    else if(starterAvg&&backupTop&&starterAvg-backupTop>=5){urgency+=14;reasons.push('salt gran entre titular i recanvi');}
+    const olderStarters=starters.filter(p=>num(p.age)>=30).length;
+    if(olderStarters){urgency+=8;reasons.push('titular 30+');}
+    const shortContracts=starters.filter(p=>p.ownership!=='Cedit al Dépor'&&num(p.contractYears)>0&&num(p.contractYears)<=1.5).length;
+    if(shortContracts){urgency+=12;reasons.push('risc contractual del titular');}
+    urgency=Math.min(100,urgency);
+    groups.push({slot,label:spanishSlotLabel(slot,0),needCount,starters,backups,starterAvg,backupTop,urgency,reasons});
+  });
+  return groups.sort((a,b)=>b.urgency-a.urgency);
+}
+function wageContext(){
+  const s=activeSquad().filter(p=>num(p.wage)>0).slice().sort((a,b)=>num(b.wage)-num(a.wage));
+  const rank=new Map(s.map((p,i)=>[p.playerId,i+1]));
+  const median=s.length?s.map(p=>num(p.wage)).sort((a,b)=>a-b)[Math.floor(s.length/2)]:0;
+  return {sorted:s,rank,median,top:num(s[0]?.wage)};
+}
+function playerDecisionPlan(){
+  const starters=lineupStarterIdSet(),bench=lineupBenchIdSet(),w=wageContext();
+  return activeSquad().map(p=>{
+    const starter=starters.has(p.playerId),onBench=bench.has(p.playerId),role=roleWeight(p.role),age=num(p.age),contract=num(p.contractYears),wage=num(p.wage),mins=num(p.minutes),sell=outgoingAdvice(p,'sell'),loan=outgoingAdvice(p,'loan');
+    let action='MANTENER',cls='keep',priority=30,reasons=[];
+    if(p.ownership==='Cedit al Dépor'){
+      const option=num(p.purchaseOptionValue);
+      if(starter&&option>0){action='DECIDIR COMPRA';cls='review';priority=72;reasons.push('cedit entrant amb pes de titular');if(option)reasons.push('opció '+valueMDisplay(option)+' M€');}
+      else if(!starter&&!onBench){action='NO PRIORITZAR COMPRA';cls='sell';priority=55;reasons.push('cessió entrant sense pes actual');}
+    } else {
+      if(contract>0&&contract<=1&& (starter||role>=4)){action='RENOVAR ARA';cls='renew';priority=92;reasons.push('peça important amb ≤1 any de contracte');}
+      else if(contract>1&&contract<=2&&(starter||role>=4)){action='PREPARAR RENOVACIÓ';cls='renew';priority=74;reasons.push('entra en finestra de renovació');}
+      else if(age<=22&&!starter&&!onBench&&loan.score>=60){action='CEDIR';cls='loan';priority=68;reasons.push('jove sense espai real a l’XI/banqueta');}
+      else if(sell.score>=68&&!starter){action='VENDRE';cls='sell';priority=70;reasons.push('poc pes esportiu i context favorable de sortida');}
+      else if(sell.score>=52&&!starter){action='ESCOLTAR OFERTES';cls='review';priority=54;reasons.push('prescindible si arriba bona oferta');}
+      else if(starter){action='MANTENER';cls='keep';priority=40;reasons.push('forma part de l’XI titular');}
+      else if(onBench){action='MANTENER ROTACIÓ';cls='keep';priority=34;reasons.push('forma part de la banqueta principal');}
+    }
+    const wageRank=w.rank.get(p.playerId)||0;
+    if(wageRank&&wageRank<=3&&!starter&&role<=3){reasons.push('salari Top '+wageRank+' sense pes equivalent');priority+=12;if(action==='MANTENER ROTACIÓ'){action='REVISAR COST/ROL';cls='review';}}
+    if(starter&&w.median&&wage<w.median*.75&&role>=4){reasons.push('salari baix pel seu pes');if(action==='MANTENER'){action='REVISAR RENOVACIÓ';cls='renew';priority=Math.max(priority,58);}}
+    if(age>=31&&!starter&&action==='MANTENER ROTACIÓ'){action='PLANIFICAR SORTIDA';cls='review';priority=58;reasons.push('veterà fora de l’XI');}
+    if(!reasons.length)reasons.push('situació estable');
+    return {p,action,cls,priority:Math.min(100,priority),starter,onBench,wageRank,reasons};
+  }).sort((a,b)=>b.priority-a.priority);
+}
+function marketPriorityPlan(){
+  return tacticalPositionPlan().filter(x=>x.urgency>=15).slice(0,4).map((x,i)=>{
+    let profile='competència immediata';
+    if(x.starters.some(p=>num(p.age)>=30))profile='successor amb capacitat de competir ja';
+    else if(x.backups.length===0)profile='recanvi fiable, no necessàriament titular';
+    else if(x.urgency>=55)profile='titular o quasi titular';
+    const maxOvr=x.starterAvg?Math.max(1,Math.round(x.starterAvg+1)):78;
+    return {...x,rank:i+1,profile,targetOvr:maxOvr};
+  });
+}
+function executiveSquadPlan(){
+  const decisions=playerDecisionPlan(),market=marketPriorityPlan(),items=[];
+  decisions.filter(x=>x.action.includes('RENOV')).slice(0,2).forEach(x=>items.push({title:x.action+' · '+x.p.name,detail:x.reasons.join(' · ')}));
+  decisions.filter(x=>['VENDRE','PLANIFICAR SORTIDA','REVISAR COST/ROL'].includes(x.action)).slice(0,2).forEach(x=>items.push({title:x.action+' · '+x.p.name,detail:x.reasons.join(' · ')}));
+  decisions.filter(x=>x.action==='CEDIR').slice(0,2).forEach(x=>items.push({title:'CEDIR · '+x.p.name,detail:x.reasons.join(' · ')}));
+  market.slice(0,2).forEach(x=>items.push({title:'MERCAT · '+x.label,detail:'Prioritat '+x.urgency+'/100 · '+x.profile+' · '+x.reasons.join(' · ')}));
+  return items.slice(0,6);
+}
 function deepSquadAnalysis(){
   const baseA=squadFormationAnalysis();
   if(baseA.label==='PLANTILLA PENDENT')return baseA;
@@ -1124,7 +1214,8 @@ function deepSquadAnalysis(){
   if(contract.score>=85)strengths.push('Sense riscos contractuals greus entre peces importants.');
   if(emotion.depor)strengths.push(emotion.depor+' jugador(s) amb vincle declarat amb el Dépor: '+emotion.names.join(', ')+'.');
   risks.push(...wage.issues,...age.issues,...contract.issues);
-  return {...baseA,overall,wage,age,contract,emotion,dbMatched,strengths,risks:risks.slice(0,8)};
+  const positionPlan=tacticalPositionPlan(),playerPlan=playerDecisionPlan(),marketPlan=marketPriorityPlan(),execPlan=executiveSquadPlan();
+  return {...baseA,overall,wage,age,contract,emotion,dbMatched,strengths,risks:risks.slice(0,8),positionPlan,playerPlan,marketPlan,execPlan};
 }
 function canonicalPos(pos){
   const p=normalizeDirectorText(pos).toUpperCase().replace(/\s+/g,'');
@@ -1297,26 +1388,42 @@ function renderSquadAnalysis(scroll=false){
   if(tag)tag.textContent=state.tactic||'4-3-3';
   const a=deepSquadAnalysis();
   if(a.label==='PLANTILLA PENDENT'){box.innerHTML='<p>'+a.text+'</p>';return;}
-  const strengths=a.strengths.length?a.strengths.join('<br>'):'Encara no hi ha prou senyals positius per destacar-ne cap.';
-  const risks=a.risks.length?a.risks.join('<br>'):'No detecto cap risc estructural important amb les dades actuals.';
-  box.innerHTML='<div class="squad-analysis-grid">'+
-    '<div class="squad-analysis-card"><strong>Índex estructura</strong><p>'+a.overall+'/100 · '+(a.overall>=85?'molt sòlida':a.overall>=70?'coherent amb punts a revisar':'necessita decisions')+'</p></div>'+
-    '<div class="squad-analysis-card"><strong>Jerarquia salarial</strong><p>'+a.wage.score+'/100</p></div>'+
-    '<div class="squad-analysis-card"><strong>Edat i successió</strong><p>'+a.age.score+'/100 · plantilla '+(a.age.avg?a.age.avg.toFixed(1):'—')+' anys · XI '+(a.age.xiAvg?a.age.xiAvg.toFixed(1):'—')+'</p></div>'+
-    '<div class="squad-analysis-card"><strong>Contractes</strong><p>'+a.contract.score+'/100</p></div>'+
-    '<div class="squad-analysis-card"><strong>BBDD real</strong><p>'+a.dbMatched+'/'+activeSquad().length+' jugadors vinculats a FC27</p></div>'+
-    '<div class="squad-analysis-card"><strong>Vincle emocional</strong><p>'+a.emotion.known+' informats · '+a.emotion.depor+' vinculats al Dépor</p></div></div>'+
-    '<div class="squad-analysis-list">'+
-      '<div class="squad-analysis-item"><strong>Fortaleses</strong><br>'+strengths+'</div>'+
-      '<div class="squad-analysis-item"><strong>Riscos / decisions</strong><br>'+risks+'</div>'+
-      '<div class="squad-analysis-item">'+a.text+'</div>'+
+  const decisions=a.playerPlan.slice(0,12);
+  const positions=a.positionPlan.slice(0,8);
+  const market=a.marketPlan;
+  const exec=a.execPlan;
+  box.innerHTML=
+    '<div class="squad-analysis-grid">'+
+      '<div class="squad-analysis-card"><strong>XI i estructura</strong><p>'+a.overall+'/100 · '+(a.overall>=85?'base sòlida':a.overall>=70?'competitiva però amb decisions':'cal intervenir')+'</p></div>'+
+      '<div class="squad-analysis-card"><strong>Jerarquia salarial</strong><p>'+a.wage.score+'/100 · '+(a.wage.issues[0]||'coherent')+'</p></div>'+
+      '<div class="squad-analysis-card"><strong>Successió</strong><p>Plantilla '+(a.age.avg?a.age.avg.toFixed(1):'—')+' anys · XI '+(a.age.xiAvg?a.age.xiAvg.toFixed(1):'—')+'</p></div>'+
+      '<div class="squad-analysis-card"><strong>Contractes</strong><p>'+a.contract.score+'/100 · '+(a.contract.issues[0]||'sense urgències principals')+'</p></div>'+
+      '<div class="squad-analysis-card"><strong>Dades reals</strong><p>'+a.dbMatched+'/'+activeSquad().length+' jugadors vinculats a FC27</p></div>'+
+      '<div class="squad-analysis-card"><strong>Prioritats mercat</strong><p>'+(market.length?market.map(x=>x.label+' '+x.urgency+'/100').join(' · '):'cap necessitat urgent')+'</p></div>'+
+    '</div>'+
+    '<div class="analysis-decision-board">'+
+      '<section class="analysis-section"><div class="analysis-section-head"><h3>Què faria ara</h3><span>'+exec.length+' decisions</span></div><div class="exec-plan">'+
+        (exec.length?exec.map((x,i)=>'<div class="exec-plan-item"><span class="priority-rank">'+(i+1)+'</span><div><strong>'+x.title+'</strong><p>'+x.detail+'</p></div></div>').join(''):'<div class="exec-plan-item"><span class="priority-rank">✓</span><div><strong>Sense urgències</strong><p>No hi ha cap decisió immediata evident.</p></div></div>')+
+      '</div></section>'+
+      '<section class="analysis-section"><div class="analysis-section-head"><h3>Pla jugador per jugador</h3><span>TOP '+decisions.length+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Jugador</th><th>Situació</th><th>Acció</th><th>Per què</th></tr></thead><tbody>'+
+        decisions.map(x=>'<tr><td><strong>'+x.p.name+'</strong><br><small>'+x.p.pos+' · '+x.p.age+' anys · '+(x.p.role||'—')+'</small></td><td>'+(x.starter?'Titular':x.onBench?'Banqueta':'Fora XI/banqueta')+(x.wageRank?' · salari #'+x.wageRank:'')+'</td><td><span class="action-chip '+x.cls+'">'+x.action+'</span></td><td>'+x.reasons.join(' · ')+'</td></tr>').join('')+
+      '</tbody></table></div></section>'+
+      '<section class="analysis-section"><div class="analysis-section-head"><h3>Mapa de profunditat tàctica</h3><span>'+(state.tactic||'4-3-3')+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Posició</th><th>Titular(s)</th><th>Recanvi(s)</th><th>Urgència</th><th>Diagnòstic</th></tr></thead><tbody>'+
+        positions.map(x=>'<tr><td><strong>'+x.label+'</strong></td><td>'+(x.starters.length?x.starters.map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+(x.backups.length?x.backups.slice(0,2).map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+x.urgency+'/100</td><td>'+(x.reasons.join(' · ')||'cobertura correcta')+'</td></tr>').join('')+
+      '</tbody></table></div></section>'+
+      '<section class="analysis-section"><div class="analysis-section-head"><h3>Pla de mercat</h3><span>'+market.length+' prioritats</span></div><div class="exec-plan">'+
+        (market.length?market.map(x=>'<div class="exec-plan-item"><span class="priority-rank">'+x.rank+'</span><div><strong>'+x.label+' · '+x.urgency+'/100</strong><p>'+x.profile+' · objectiu orientatiu OVR ~'+x.targetOvr+' · '+x.reasons.join(' · ')+'</p></div></div>').join(''):'<div class="exec-plan-item"><span class="priority-rank">✓</span><div><strong>No forçaria fitxatges</strong><p>La plantilla no mostra cap forat que justifiqui una operació per si sola.</p></div></div>')+
+      '</div></section>'+
     '</div>';
   if(scroll)$('#squadAnalysisPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 async function directorReply(text){
  const t=normalizeDirectorText(text),pos=positionFromText(text);
- if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica'))return deepSquadAnalysis();
+ if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica')){
+   const a=deepSquadAnalysis();
+   return {label:'PLA DE PLANTILLA · '+a.overall+'/100',cls:a.overall>=80?'good':'warn',text:(a.execPlan||[]).map((x,i)=>(i+1)+'. <strong>'+x.title+'</strong> · '+x.detail).join('<br><br>')||'No detecto cap decisió urgent.'};
+ }
  if(pos&&(t.includes('busco')||t.includes('necessit')||t.includes('reforc')||t.includes('reforz')))return directorPositionAdvice(pos);
  const player=findSquadPlayerFromText(text);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
