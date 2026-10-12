@@ -1238,6 +1238,67 @@ function normalizeDirectorText(s){return String(s||'').toLowerCase().normalize('
 function findSquadPlayerFromText(text){const t=normalizeDirectorText(text);let best=null,bestScore=0;for(const p of state.squad){const n=normalizeDirectorText(p.name);if(n&&t.includes(n))return p;const tokens=n.split(/\s+/).filter(x=>x.length>=4);const score=tokens.filter(x=>t.includes(x)).length;if(score>bestScore){best=p;bestScore=score}}return bestScore?best:null}
 function squadDepthFor(p){const pos=String(p.pos||'').toUpperCase();return activeSquad().filter(x=>String(x.pos||'').toUpperCase()===pos).length}
 function extractOfferAmount(text){const s=String(text||'').replace(',','.');const m=s.match(/(\d+(?:\.\d+)?)\s*(?:m€|m eur|millones|milions|m\b)/i);return m?Number(m[1]):0}
+function parseRenewalMoney(text){
+  const raw=String(text||'');
+  const nums=[...raw.matchAll(/(?:^|[^\d])([0-9]{1,3}(?:[. ][0-9]{3})+|[0-9]{4,6})(?:\s*€)?/g)]
+    .map(m=>Number(String(m[1]).replace(/[. ]/g,'')))
+    .filter(v=>Number.isFinite(v)&&v>0);
+  let wage=0,bonus=0;
+  const wageMatch=raw.match(/(?:salari|sou|sueldo|fitxa|ficha|deman\w*|pide\w*)[^0-9]{0,20}([0-9]{1,3}(?:[. ][0-9]{3})+|[0-9]{4,6})/i);
+  const bonusMatch=raw.match(/(?:prima|bonus)[^0-9]{0,20}([0-9]{1,3}(?:[. ][0-9]{3})+|[0-9]{4,7})/i);
+  if(wageMatch)wage=Number(wageMatch[1].replace(/[. ]/g,''));
+  if(bonusMatch)bonus=Number(bonusMatch[1].replace(/[. ]/g,''));
+  if(!wage&&nums.length)wage=nums[0];
+  if(!bonus&&nums.length>1)bonus=nums[1];
+  return {wage,bonus};
+}
+function renewalAdvice(p,text){
+  const terms=parseRenewalMoney(text);
+  const currentWage=num(p.wage);
+  const w=wageContext();
+  const top=w.top||0;
+  const median=w.median||0;
+  const importance=playerImportance(p);
+  const contract=num(p.contractYears);
+  const age=num(p.age);
+  const requested=terms.wage;
+  const bonus=terms.bonus;
+  const wageRise=currentWage>0&&requested>0?(requested-currentWage)/currentWage:null;
+  const hierarchy=requested>0&&top>0?requested/top:null;
+  const bonusVsAnnual=requested>0&&bonus>0?bonus/(requested*52):null;
+  let score=50;
+  const positives=[],risks=[];
+  if(contract>0&&contract<=1){score+=18;positives.push('contracte en zona de risc');}
+  else if(contract>1&&contract<=2){score+=10;positives.push('és bon moment per renovar');}
+  if(importance>=70){score+=18;positives.push('pes esportiu alt');}
+  else if(importance>=55){score+=8;positives.push('pes esportiu útil');}
+  else {score-=8;risks.push('pes esportiu limitat');}
+  if(age>=30){score-=8;risks.push('edat que obliga a vigilar durada i cost');}
+  if(wageRise!==null){
+    if(wageRise<=.10){score+=12;positives.push('pujada salarial dins del marge');}
+    else if(wageRise<=.20){score+=2;risks.push('pujada salarial notable');}
+    else if(wageRise<=.35){score-=10;risks.push('pujada salarial alta');}
+    else {score-=22;risks.push('salt salarial excessiu');}
+  }
+  if(hierarchy!==null&&hierarchy>1.10){score-=25;risks.push('trenca la jerarquia salarial (>110% del top actual)');}
+  if(bonusVsAnnual!==null){
+    if(bonusVsAnnual<=.25){score+=3;}
+    else if(bonusVsAnnual<=.50){score-=4;risks.push('prima significativa');}
+    else {score-=10;risks.push('prima molt elevada respecte al salari anual');}
+  }
+  score=Math.max(0,Math.min(100,score));
+  let label='NEGOCIAR',cls='warn',decision='No acceptaria encara aquesta proposta tal com està.';
+  if(score>=72){label='RENOVAR';cls='good';decision='Renovaria, sempre que la durada del contracte sigui coherent amb l’edat i el rol.';}
+  else if(score<45){label='NO ACCEPTAR';cls='bad';decision='No acceptaria aquestes condicions. Forçaria una contraproposta clara o deixaria la renovació en pausa.';}
+  const details=[];
+  details.push('<strong>Recomanació:</strong> '+decision);
+  if(requested)details.push('Sou demanat: <strong>'+requested.toLocaleString('ca-ES')+' €/set.</strong>'+(currentWage?' vs '+currentWage.toLocaleString('ca-ES')+' € actuals ('+(wageRise>=0?'+':'')+(wageRise*100).toFixed(1)+'%)':''));
+  if(bonus)details.push('Prima: <strong>'+bonus.toLocaleString('ca-ES')+' €</strong>'+(bonusVsAnnual!==null?' · '+(bonusVsAnnual*100).toFixed(0)+'% del salari anual proposat':''));
+  details.push('Context: importància '+importance+'/100 · '+(contract?contract+' anys de contracte restants':'contracte pendent')+(top?' · top salarial actual '+top.toLocaleString('ca-ES')+' €/set.':''));
+  if(positives.length)details.push('<strong>A favor:</strong> '+positives.join(' · '));
+  if(risks.length)details.push('<strong>Riscos:</strong> '+risks.join(' · '));
+  return {label:label+' · '+score+'/100',cls,text:details.join('<br><br>')};
+}
 function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role);if(role.includes('clave')||role.includes('clau'))pts+=22;else if(role.includes('importante')||role.includes('titular'))pts+=14;else if(role.includes('rotacion')||role.includes('rot')||role.includes('supl'))pts-=4;else if(role.includes('ocasional'))pts-=12;else if(role.includes('promesa'))pts-=6;if(num(p.minutes)>=1800)pts+=10;else if(num(p.minutes)<500)pts-=10;if(ovrDelta(p)>=2)pts+=10;else if(ovrDelta(p)<0)pts-=8;if(playerCareerOvr(p)>=78)pts+=8;if(num(p.age)<=23)pts+=5;if(squadDepthFor(p)<=2)pts+=8;return Math.max(0,Math.min(100,pts))}
 function outgoingAdvice(p,mode,offer=0){
  const importance=playerImportance(p),age=num(p.age),mins=num(p.minutes),delta=ovrDelta(p),value=num(p.value),depth=squadDepthFor(p);
@@ -1648,6 +1709,7 @@ async function directorReply(text){
  }
  if(pos&&(t.includes('busco')||t.includes('necessit')||t.includes('reforc')||t.includes('reforz')))return directorPositionAdvice(pos);
  const player=findSquadPlayerFromText(text);
+ if(player&&(t.includes('renov')||t.includes('contracte')||t.includes('contrato')||t.includes('salari')||t.includes('sou')||t.includes('sueldo')||t.includes('prima')))return renewalAdvice(player,text);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
  if((t.includes('cedir')||t.includes('cessio')||t.includes('cesion'))&&player){const a=outgoingAdvice(player,'loan');return {label:a.label+' · '+a.score+'/100',cls:a.cls,text:player.name+': '+a.text+'.'}}
  if((t.includes('vendre')||t.includes('vender')||t.includes('vendries')||t.includes('venderias'))&&player){const a=outgoingAdvice(player,'sell');return {label:a.label+' · '+a.score+'/100',cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
@@ -1656,7 +1718,7 @@ async function directorReply(text){
  if(t.includes('intocable')||t.includes('no tocaria vendre')){const list=[...state.squad].sort((a,b)=>playerImportance(b)-playerImportance(a)).slice(0,5);return {label:'INTOCABLES ACTUALS',cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · Importància '+playerImportance(p)+'/100 · OVR '+playerCareerOvr(p)).join('<br>')}}
  if(t.includes('fitx')||t.includes('fich')||t.includes('comprar'))return directorSigningAdvice(text);
  if(player)return {label:'ANÀLISI DE PLANTILLA',cls:'warn',text:'He identificat '+player.name+'. Digues-me si valores vendre’l, cedir-lo o si tens una oferta concreta.'};
- return {label:'NECESSITO MÉS CONTEXT',cls:'warn',text:'Prova: “Vendries X?”, “Cedim X?”, “M’ofereixen 12 M€ per X”, “És realista fitxar X?” o “Busco un central”.'};
+ return {label:'NECESSITO MÉS CONTEXT',cls:'warn',text:'Prova: “Renovaries X per 21.500 €/set. + 200.000 € de prima?”, “Vendries X?”, “Cedim X?”, “M’ofereixen 12 M€ per X” o “Busco un central”.'};
 }
 async function sendDirectorChat(textOverride){const input=$('#directorChatInput');const text=String(textOverride||input?.value||'').trim();if(!text)return;state.directorChat=state.directorChat||[];state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});if(input)input.value='';renderTransferLab();state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Analitzant el context…'});renderTransferLab();const i=state.directorChat.length-1;try{const a=await directorReply(text);state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text}}catch(e){state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'}}save()}
 function playerCareerOvr(p){return num(p.currentOvr||p.ovr||p.baseOvr||0)}
