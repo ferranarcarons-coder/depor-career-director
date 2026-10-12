@@ -502,7 +502,22 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     </section>
 
     <section id="youth" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">ACADEMY</p><h2>Cantera</h2><p>Seguiment de promocions i minuts de joves.</p></div><button class="primary" id="addYouthBtn">+ Afegir jove</button></div>
+      <div class="section-toolbar"><div><p class="eyebrow">ACADEMY</p><h2>Cantera</h2><p>Seguiment de promocions i minuts de joves.</p></div></div>
+      <article class="panel">
+        <div class="panel-head"><div><p class="eyebrow">NEW ACADEMY PLAYER</p><h2>Afegir jove</h2></div><span>MANUAL</span></div>
+        <div class="form-grid">
+          <label>Nom<input id="youthName" type="text"></label>
+          <label>Edat<input id="youthAge" type="number" min="15" max="23"></label>
+          <label>Posició<select id="youthPos"><option>POR</option><option>LI</option><option>DFC</option><option>LD</option><option>MCD</option><option>MC</option><option>MCO</option><option>MI</option><option>MD</option><option>EI</option><option>ED</option><option>DC</option></select></label>
+          <label>Origen<input id="youthOrigin" type="text" placeholder="Cantera Dépor"></label>
+          <label>OVR<input id="youthOvr" type="number" min="1" max="99"></label>
+          <label>Minuts<input id="youthMinutes" type="number" min="0" value="0"></label>
+          <label>Aparicions<input id="youthApps" type="number" min="0" value="0"></label>
+          <label>Estat<select id="youthStatus"><option>Cantera</option><option>Primer equip</option><option>Cedit</option></select></label>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px"><button type="button" class="primary" id="saveYouthBtn">Guardar jove</button></div>
+        <div id="youthSaveStatus" class="sync-banner hidden"></div>
+      </article>
       <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Edat</th><th>Pos.</th><th>Origen</th><th>OVR</th><th>Minuts</th><th>Aparicions</th><th>Estat</th><th></th></tr></thead><tbody id="youthTable"></tbody></table></div>
     </section>
 
@@ -1981,8 +1996,30 @@ $('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',n
   state.transfers.push(d);
   return true;
 });
+$('#saveYouthBtn').onclick=()=>{
+  const name=String($('#youthName')?.value||'').trim();
+  const age=num($('#youthAge')?.value),pos=$('#youthPos')?.value||'',
+        origin=String($('#youthOrigin')?.value||'Cantera Dépor').trim(),
+        ovr=num($('#youthOvr')?.value),minutes=num($('#youthMinutes')?.value),
+        appearances=num($('#youthApps')?.value),status=$('#youthStatus')?.value||'Cantera',
+        msg=$('#youthSaveStatus');
+  if(!name||!age||!pos||!ovr){
+    if(msg){msg.className='sync-banner warn';msg.textContent='Completa nom, edat, posició i OVR.';}
+    return;
+  }
+  if(status==='Primer equip'&&state.youth.filter(y=>y.status==='Primer equip').length>=2){
+    if(msg){msg.className='sync-banner warn';msg.textContent='Màxim 2 promocions significatives al primer equip aquesta temporada.';}
+    return;
+  }
+  state.youth.push({name,age,pos,origin,ovr,minutes,appearances,status});
+  save();
+  ['youthName','youthAge','youthOvr'].forEach(id=>{const el=$('#'+id);if(el)el.value='';});
+  if($('#youthMinutes'))$('#youthMinutes').value='0';
+  if($('#youthApps'))$('#youthApps').value='0';
+  if(msg){msg.className='sync-banner ok';msg.textContent='Jove guardat correctament.';setTimeout(()=>msg.classList.add('hidden'),1800);}
+};
 $('#addObjectiveBtn').onclick=()=>modal('Afegir objectiu',[{label:'Objectiu',name:'name',full:1},{label:'Detall',name:'detail',full:1},{label:'Progrés %',name:'progress',type:'number',min:0,max:100},{label:'Pes %',name:'weight',type:'number',min:0,max:100},{label:'Prioritat',name:'priority',type:'select',options:['Alta','Mitjana','Baixa']},{label:'Revisió',name:'review'}],d=>state.objectives.push({...d,progress:num(d.progress),weight:num(d.weight),status:'active'}));
-$('#addYouthBtn').onclick=()=>modal('Afegir jove',[{label:'Nom',name:'name',full:1},{label:'Edat',name:'age',type:'number'},{label:'Posició',name:'pos'},{label:'Origen',name:'origin'},{label:'OVR',name:'ovr',type:'number'},{label:'Minuts',name:'minutes',type:'number'},{label:'Aparicions',name:'appearances',type:'number'},{label:'Estat',name:'status',type:'select',options:['Cantera','Primer equip','Cedit']}],d=>{if(d.status==='Primer equip'&&state.youth.filter(y=>y.status==='Primer equip').length>=2){alert('⛔ PROMOCIÓ BLOQUEJADA\n\nLa normativa permet un màxim de 2 promocions significatives de cantera per temporada.');return false;}state.youth.push(d);return true;});
+
 $('#addSeasonBtn').onclick=()=>{const r=realism();modal('Tancar temporada',[{label:'Temporada',name:'season',full:1},{label:'Posició final',name:'position'},{label:'Resum',name:'summary',full:1}],d=>{const pos=num(d.position);const franchiseUsed=state.transfers.some(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)&&t.franchise==='Sí');state.history.unshift({...d,score:r.score,net:r.net,franchiseUsed,clubStatus:state.clubStatus});if(pos){let next=state.clubStatus;if(pos<=7)next=Math.max(next,5.4);else if(pos<=10)next=Math.max(next,5.2);else if(pos<=13)next=Math.max(next,5.0);else if(pos<=17)next=Math.max(4.5,Math.min(next,4.8));else next=Math.max(4.2,next-.2);state.clubStatus=Number(next.toFixed(1));}})};
 
 $('#editNextMatchBtn').onclick=()=>modal('Proper partit',[{label:'Rival',name:'opponent',full:1},{label:'Competició',name:'competition'},{label:'Data / jornada',name:'date'},{label:'Localització',name:'venue',type:'select',options:['Casa','Fora']}],d=>state.nextMatch=d);
