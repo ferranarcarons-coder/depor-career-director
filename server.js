@@ -582,8 +582,97 @@ async function serveIndex(res) {
       } catch (e) {}
     }
     initialState = {...(initialState||{}), squad:dedicatedSquad};
+
+    // Authoritative finance snapshot rendered on the server so Dashboard/Finances
+    // do not depend on the large client-side render chain.
+    const finance = {...(initialState.finance || {})};
+    finance.initialBudget = 11.613983;
+    finance.budgetSource = 'EA available transfer budget after staff changes';
+
+    const wageContribution = (p) => {
+      const wage = Number(p?.wage || 0);
+      if (!wage) return 0;
+      const own = p?.ownership || 'Propietat';
+      if (own === 'Propietat') return wage;
+      const shareRaw = Number(p?.wageShareDepor || 0);
+      const share = Number.isFinite(shareRaw)
+        ? Math.max(0, Math.min(100, shareRaw))
+        : (own === 'Cedit al Dépor' ? 100 : 0);
+      if (own === 'Cedit al Dépor' && shareRaw <= 0) return wage;
+      return wage * (share / 100);
+    };
+
+    const currentWages = dedicatedSquad.reduce((sum,p)=>sum+wageContribution(p),0);
+    const initialMap = finance.initialWageByPlayer && typeof finance.initialWageByPlayer === 'object'
+      ? finance.initialWageByPlayer : {};
+    let initialWages = Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0);
+
+    if (!initialWages && dedicatedSquad.length >= 18) {
+      const snap = {};
+      dedicatedSquad.forEach(p => { if (p.playerId) snap[p.playerId] = wageContribution(p); });
+      finance.initialWageByPlayer = snap;
+      finance.baselineLocked = true;
+      finance.initialWageCapturedAt = finance.initialWageCapturedAt || new Date().toISOString();
+      initialWages = currentWages;
+      initialState.finance = finance;
+      try {
+        await pool.query(
+          'UPDATE career_state SET data = jsonb_set(COALESCE(data,\'{}\'::jsonb), \'{finance}\', $2::jsonb, true), updated_at=NOW() WHERE id=$1',
+          ['main', JSON.stringify(finance)]
+        );
+      } catch (e) {}
+    } else {
+      initialState.finance = finance;
+    }
+
+    const transfers = Array.isArray(initialState.transfers) ? initialState.transfers : [];
+    const expenseTypes = new Set(['Compra','Cessió entrada','Agent lliure']);
+    const incomeTypes = new Set(['Venda','Cessió sortida']);
+    const transferSpend = transfers.filter(t=>expenseTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+    const transferIncome = transfers.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+    const availableBudget = 11.613983 + transferIncome * 0.70 - transferSpend;
+    const wageGrowth = initialWages ? (currentWages-initialWages)/initialWages : 0;
+
+    const euroM = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(Number(v||0)*1000000);
+    const wageK = v => (Number(v||0)/1000).toLocaleString('es-ES',{minimumFractionDigits:1,maximumFractionDigits:1});
+
     const safeState = JSON.stringify(initialState).replace(/</g, '\\u003c');
     html = html.replace('<script>', '<script>window.__SERVER_STATE__='+safeState+';<\/script><script>');
+
+    // Server-render the finance values as a fallback and first paint.
+    html = html.replace('id="finInitialBudget" type="text" value="11.613.983 €" readonly',
+      'id="finInitialBudget" type="text" value="11.613.983 €" readonly');
+    html = html.replace('<input id="finOperationalOpening" type="text" readonly>',
+      '<input id="finOperationalOpening" type="text" value="'+euroM(11.613983)+'" readonly>');
+    html = html.replace('<input id="finBudget" type="text" readonly>',
+      '<input id="finBudget" type="text" value="'+euroM(availableBudget)+'" readonly>');
+    html = html.replace('<input id="finInitialWages" type="text" readonly>',
+      '<input id="finInitialWages" type="text" value="'+wageK(initialWages)+' k€/set." readonly>');
+    html = html.replace('<input id="finWages" type="text" readonly>',
+      '<input id="finWages" type="text" value="'+wageK(currentWages)+' k€/set." readonly>');
+    html = html.replace('<input id="finWageGrowth" type="text" readonly>',
+      '<input id="finWageGrowth" type="text" value="'+(wageGrowth>=0?'+':'')+(wageGrowth*100).toFixed(1)+'%" readonly>');
+
+    html = html.replace('<strong id="budgetKpi">€12.0M</strong>',
+      '<strong id="budgetKpi">'+euroM(availableBudget)+'</strong>');
+    html = html.replace('<small id="budgetDelta">Disponible</small>',
+      '<small id="budgetDelta">'+euroM(11.613983)+' pressupost inicial</small>');
+    html = html.replace('<strong id="wageGrowthKpi">—</strong>',
+      '<strong id="wageGrowthKpi">'+wageK(currentWages)+' k€/set.</strong>');
+    html = html.replace('<small id="wageGrowthLabel">vs inici</small>',
+      '<small id="wageGrowthLabel">'+(initialWages?((wageGrowth>=0?'+':'')+(wageGrowth*100).toFixed(1)+'% vs inici'):'Base salarial actual')+'</small>');
+
+    html = html.replace('<div id="financeSummary"></div>',
+      '<div id="financeSummary"><div class="summary-grid">'+
+      '<div class="summary-box"><small>Pressupost inicial EA</small><strong>'+euroM(11.613983)+'</strong></div>'+
+      '<div class="summary-box"><small>Despesa mercat</small><strong>'+euroM(transferSpend)+'</strong></div>'+
+      '<div class="summary-box"><small>Ingressos mercat</small><strong>'+euroM(transferIncome)+'</strong></div>'+
+      '<div class="summary-box"><small>Reinversió vendes (70%)</small><strong>'+euroM(transferIncome*.70)+'</strong></div>'+
+      '<div class="summary-box"><small>Disponible ara</small><strong>'+euroM(availableBudget)+'</strong></div>'+
+      '<div class="summary-box"><small>Massa salarial inicial</small><strong>'+wageK(initialWages)+' k€/set.</strong></div>'+
+      '<div class="summary-box"><small>Massa salarial actual</small><strong>'+wageK(currentWages)+' k€/set.</strong></div>'+
+      '<div class="summary-box"><small>Variació salarial</small><strong>'+(wageGrowth>=0?'+':'')+(wageGrowth*100).toFixed(1)+'%</strong></div>'+
+      '</div></div>');
 
     // Server-render the saved squad so it is visible even before any client-side sync/render runs.
     const squad=dedicatedSquad;
