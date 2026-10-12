@@ -87,6 +87,25 @@ async function initDb() {
       );
     }
   }
+  try {
+    const squadDiag = await pool.query('SELECT data FROM squad_players');
+    const stateDiag = await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+    const squadRows = squadDiag.rows.map(r=>r.data||{});
+    const wageSum = squadRows.reduce((a,p)=>a+Number(p.wage||0),0);
+    const wageNonZero = squadRows.filter(p=>Number(p.wage||0)>0).length;
+    const st = stateDiag.rows[0]?.data || {};
+    const fin = st.finance || {};
+    console.log('[FINANCE_DIAG]', JSON.stringify({
+      squadCount:squadRows.length,
+      wageNonZero,
+      wageSum,
+      sampleWages:squadRows.slice(0,5).map(p=>({name:p.name,wage:p.wage,ownership:p.ownership,wageShareDepor:p.wageShareDepor})),
+      transferCount:Array.isArray(st.transfers)?st.transfers.length:0,
+      finance:fin
+    }));
+  } catch (e) {
+    console.log('[FINANCE_DIAG_ERROR]', e.message);
+  }
   dbReady = true;
   return true;
 }
