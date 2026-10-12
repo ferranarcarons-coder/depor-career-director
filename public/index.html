@@ -589,6 +589,73 @@ function resultLetter(m){return resultClass(m)==='win'?'V':resultClass(m)==='dra
 function matchPoints(m){return resultClass(m)==='win'?3:resultClass(m)==='draw'?1:0}
 function positionGroup(pos){const p=(pos||'').toUpperCase();if(/POR|GK/.test(p))return 'GK';if(/DFC|LI|LD|CAD|CAI|CB|LB|RB|DEF/.test(p))return 'DEF';if(/MCD|MC|MCO|MI|MD|CM|CAM|CDM|MID/.test(p))return 'MID';return 'ATT'}
 function seasonChart(){const el=$('#seasonChart');if(!state.matches.length){el.innerHTML='<div class="empty-chart">Registra el primer partit per començar a dibuixar la temporada.</div>';return}const w=620,h=175,pad=8;const pts=state.matches.map((m,i)=>({x:state.matches.length===1?w/2:pad+i*(w-2*pad)/(state.matches.length-1),y:pad+(Math.max(1,Math.min(20,num(m.position)))-1)*(h-2*pad)/19}));const poly=pts.map(p=>`${p.x},${p.y}`).join(' ');const area=`${pts[0].x},${h} ${poly} ${pts[pts.length-1].x},${h}`;el.innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1765d8" stop-opacity=".20"/><stop offset="1" stop-color="#1765d8" stop-opacity="0"/></linearGradient></defs><polygon points="${area}" fill="url(#areaFill)"/><polyline points="${poly}" fill="none" stroke="#1765d8" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>${pts.map((p,i)=>`<circle cx="${p.x}" cy="${p.y}" r="${i===pts.length-1?5:3}" fill="white" stroke="#1765d8" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join('')}</svg>`}
+function validRealityOverride(t){
+  const ctx=String(t.context||'');
+  const why=String(t.reason||'').trim();
+  return t.override==='Sí' && ctx && ctx!=='Normal' && why.length>=12;
+}
+
+function blockOperation(errors){
+  if(!errors.length)return false;
+  alert('⛔ OPERACIÓ BLOQUEJADA\n\n'+errors.map((e,i)=>(i+1)+'. '+e).join('\n')+'\n\nLa normativa del projecte no permet registrar aquesta operació.');
+  return true;
+}
+
+function validateTransferRules(t){
+  const errors=[];
+  const incomingTypes=['Compra','Agent lliure','Cessió entrada'];
+  if(!incomingTypes.includes(t.type))return errors;
+
+  const incoming=state.transfers.filter(x=>incomingTypes.includes(x.type));
+  const summer=incoming.filter(x=>(x.window||'Estiu')==='Estiu');
+  const winter=incoming.filter(x=>x.window==='Hivern');
+  const starterSummer=summer.filter(x=>x.role==='Titular');
+  const veterans=incoming.filter(x=>num(x.age)>30);
+  const loans=incoming.filter(x=>x.type==='Cessió entrada');
+  const free=incoming.filter(x=>x.type==='Agent lliure');
+  const franchise=incoming.filter(x=>x.franchise==='Sí');
+  const overrideOk=validRealityOverride(t);
+
+  if(t.hiddenPotential==='Sí') errors.push('No es pot utilitzar potencial ocult o informació externa de potencial per decidir un fitxatge.');
+
+  if((t.window||'Estiu')==='Estiu'){
+    if(summer.length>=3 && !overrideOk) errors.push('Màxim 3 incorporacions d’estiu. Una quarta només és admissible amb un Reality Override justificat.');
+    if(t.role==='Titular' && starterSummer.length>=2 && !overrideOk) errors.push('Màxim 2 fitxatges pensats com a titulars immediats a l’estiu.');
+  }
+
+  if(t.window==='Hivern' && winter.length>=1 && !overrideOk){
+    errors.push('Màxim 1 incorporació d’hivern, excepte emergència real, venda prèvia, lesió greu o necessitat crítica amb Reality Override.');
+  }
+
+  if(num(t.age)>30 && veterans.length>=1 && !overrideOk) errors.push('Màxim 1 incorporació de més de 30 anys per temporada.');
+  if(t.type==='Cessió entrada' && loans.length>=2) errors.push('Màxim 2 cessions entrants simultànies.');
+  if(t.type==='Agent lliure' && free.length>=1) errors.push('Màxim 1 agent lliure rellevant per temporada.');
+
+  const lastSeason=state.history&&state.history[0];
+  if(t.franchise==='Sí'){
+    if(franchise.length>=1) errors.push('Ja s’ha utilitzat el jugador franquícia aquesta temporada.');
+    if(lastSeason&&lastSeason.franchiseUsed) errors.push('La regla de jugador franquícia només permet una excepció cada dues temporades.');
+  }
+
+  const topWage=Math.max(0,...state.squad.map(p=>num(p.wage)));
+  if(topWage>0 && num(t.wage)>topWage*1.10 && t.franchise!=='Sí'){
+    errors.push('El salari supera el 110% del salari més alt de la plantilla. Cal que sigui l’excepció de jugador franquícia.');
+  }
+
+  const sales=state.transfers.filter(x=>x.type==='Venda').reduce((a,b)=>a+num(b.amount),0);
+  const spend=state.transfers.filter(x=>['Compra','Agent lliure'].includes(x.type)).reduce((a,b)=>a+num(b.amount),0);
+  const realBudget=num(state.finance.initialBudget)*.70 + sales*.70 + num(state.finance.extraIncome);
+  if(t.type==='Compra' && num(t.amount)>0 && spend+num(t.amount)>realBudget){
+    errors.push('El fitxatge superaria el pressupost operatiu realista disponible ('+money(Math.max(0,realBudget-spend))+' restants).');
+  }
+
+  if(state.squad.length && state.squad.length>=25 && ['Compra','Agent lliure','Cessió entrada'].includes(t.type) && !overrideOk){
+    errors.push('La plantilla ja té '+state.squad.length+' jugadors. El projecte fixa un màxim operatiu de 25 abans d’una nova incorporació.');
+  }
+
+  return errors;
+}
+
 function transferFit(a){
   let score=100;
   const reasons=[];
@@ -782,7 +849,7 @@ function batchOvrUpdate(){
   });
 }
 window.removeItem=(type,i)=>{if(confirm('Eliminar aquest registre?')){state[type].splice(i,1);save()}};
-function modal(title,fields,onSave){const dlg=$('#modal'),form=$('#modalForm');$('#modalContent').innerHTML=`<h2>${title}</h2><div class="modal-grid">${fields.map(f=>`<label class="${f.full?'full':''}">${f.label}${f.type==='select'?`<select name="${f.name}">${f.options.map(o=>`<option ${String(o)===String(f.value||'')?'selected':''}>${o}</option>`).join('')}</select>`:f.type==='textarea'?`<textarea name="${f.name}" rows="6" placeholder="${f.placeholder||''}" ${f.optional?'':'required'}>${f.value||''}</textarea>`:`<input name="${f.name}" type="${f.type||'text'}" value="${f.value||''}" ${f.step?`step="${f.step}"`:''} ${f.min!==undefined?`min="${f.min}"`:''} ${f.max!==undefined?`max="${f.max}"`:''} ${f.optional?'':'required'}>`}</label>`).join('')}</div>`;dlg.showModal();$('#modalCancel').onclick=()=>dlg.close('cancel');$('#modalSave').onclick=()=>{if(!form.reportValidity())return;const data=Object.fromEntries(new FormData(form).entries());onSave(data);dlg.close('save');save();};dlg.onclick=e=>{if(e.target===dlg)dlg.close('cancel');};}
+function modal(title,fields,onSave){const dlg=$('#modal'),form=$('#modalForm');$('#modalContent').innerHTML=`<h2>${title}</h2><div class="modal-grid">${fields.map(f=>`<label class="${f.full?'full':''}">${f.label}${f.type==='select'?`<select name="${f.name}">${f.options.map(o=>`<option ${String(o)===String(f.value||'')?'selected':''}>${o}</option>`).join('')}</select>`:f.type==='textarea'?`<textarea name="${f.name}" rows="6" placeholder="${f.placeholder||''}" ${f.optional?'':'required'}>${f.value||''}</textarea>`:`<input name="${f.name}" type="${f.type||'text'}" value="${f.value||''}" ${f.step?`step="${f.step}"`:''} ${f.min!==undefined?`min="${f.min}"`:''} ${f.max!==undefined?`max="${f.max}"`:''} ${f.optional?'':'required'}>`}</label>`).join('')}</div>`;dlg.showModal();$('#modalCancel').onclick=()=>dlg.close('cancel');$('#modalSave').onclick=()=>{if(!form.reportValidity())return;const data=Object.fromEntries(new FormData(form).entries());const accepted=onSave(data);if(accepted===false)return;dlg.close('save');save();};dlg.onclick=e=>{if(e.target===dlg)dlg.close('cancel');};}
 $('#addMatchBtn').onclick=()=>modal('Registrar partit',[{label:'Rival',name:'opponent',full:1},{label:'Gols Dépor',name:'gf',type:'number',min:0},{label:'Gols rival',name:'ga',type:'number',min:0},{label:'Posició després del partit',name:'position',type:'number',min:1,max:20}],d=>state.matches.push({...d,gf:num(d.gf),ga:num(d.ga),position:num(d.position)}));
 $('#batchOvrBtn').onclick=()=>batchOvrUpdate();$('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[{label:'Nom',name:'name',full:1},{label:'Posició',name:'pos'},{label:'Edat',name:'age',type:'number'},{label:'Rol',name:'role'},{label:'OVR base FC27',name:'baseOvr',type:'number',min:1,max:99,optional:1},{label:'OVR actual Career',name:'currentOvr',type:'number',min:1,max:99,optional:1},{label:'Valor €M',name:'value',type:'number',step:'.1'},{label:'Sou €/set.',name:'wage',type:'number'},{label:'Contracte fins',name:'contract'},{label:'Minuts',name:'minutes',type:'number'},{label:'Gols',name:'goals',type:'number'},{label:'Assistències',name:'assists',type:'number'}],d=>{const base=num(d.baseOvr||d.currentOvr);const cur=num(d.currentOvr||d.baseOvr);state.squad.push({...d,baseOvr:base,currentOvr:cur,ovrUpdatedAt:cur?new Date().toLocaleDateString('ca-ES'):''});if(d.name&&cur)state.playerOvrOverrides[d.name.trim().toLowerCase()]=cur;});
 
@@ -869,6 +936,8 @@ function targetFields(prefill={}){return [
  {label:'Sou previst €/set. (si el saps)',name:'wage',type:'number',optional:1},
  {label:'Anys contracte restants (si el saps)',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},
  {label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},
+ {label:'Context excepcional?',name:'context',type:'select',options:['Normal','Lesió greu','Venda prèvia','Necessitat crítica','Oportunitat excepcional'],value:prefill.context||'Normal'},
+ {label:'Reality Override?',name:'override',type:'select',options:['No','Sí'],value:prefill.override||'No'},
  {label:'Context / per què podria venir?',name:'reason',type:'textarea',full:1,placeholder:'Opcional: busca minuts, club venedor, final de contracte...',value:prefill.reason||'',optional:1},
  {label:'Nivell jugador (auto)',name:'playerLevel',type:'number',min:1,max:10,step:'.1',value:prefill.playerLevel||'',optional:1},
  {label:'Nivell club origen (auto)',name:'originLevel',type:'number',min:1,max:10,step:'.1',value:prefill.originLevel||'',optional:1},
@@ -878,12 +947,46 @@ function targetFields(prefill={}){return [
 function analyseTarget(prefill={}){modal('Analitzar objectiu de mercat',targetFields(prefill),d=>{const assessment={...prefill,...d,analysedAt:new Date().toLocaleDateString('ca-ES')};state.latestAssessment=assessment;const idx=state.shortlist.findIndex(x=>x.player.toLowerCase()===assessment.player.toLowerCase());if(idx>=0)state.shortlist[idx]=assessment;else state.shortlist.unshift(assessment);});}
 window.reviewTarget=i=>{const x=state.shortlist[i];if(x)analyseTarget(x)};
 window.removeTarget=i=>{if(confirm('Eliminar aquest objectiu de la shortlist?')){state.shortlist.splice(i,1);save()}};
-window.signTarget=i=>{const x=state.shortlist[i];if(!x)return;const r=transferFit(x);if(r.score<70&&!confirm(`Fit Score ${r.score}/100 (${r.verdict}). Vols registrar igualment el fitxatge?`))return;state.transfers.push({player:x.player,type:x.type==='Cessió entrada'?'Cessió entrada':x.type==='Agent lliure'?'Agent lliure':'Compra',window:'Estiu',club:x.club,amount:x.fee,playerValue:x.value,wage:x.wage,age:x.age,role:x.expectedRole,market:x.market,context:'Normal',playerLevel:x.playerLevel,hiddenPotential:x.hiddenPotential,franchise:x.franchise,reason:`Transfer Lab ${r.score}/100 · ${r.verdict}${x.reason?' · '+x.reason:''}`});state.shortlist.splice(i,1);save();};
+window.signTarget=i=>{
+  const x=state.shortlist[i];if(!x)return;
+  const r=transferFit(x);
+  const t={
+    player:x.player,
+    type:x.type==='Cessió entrada'?'Cessió entrada':x.type==='Agent lliure'?'Agent lliure':'Compra',
+    window:x.window||'Estiu',
+    club:x.club,
+    amount:x.fee,
+    playerValue:x.value,
+    wage:x.wage,
+    age:x.age,
+    role:x.expectedRole,
+    market:x.market,
+    context:x.context||'Normal',
+    playerLevel:x.playerLevel,
+    hiddenPotential:x.hiddenPotential,
+    franchise:x.franchise,
+    override:x.override||'No',
+    reason:'Transfer Lab '+r.score+'/100 · '+r.verdict+(x.reason?' · '+x.reason:'')
+  };
+  const errors=validateTransferRules(t);
+  if(blockOperation(errors))return;
+  if(r.score<55){
+    alert('⛔ OPERACIÓ BLOQUEJADA\n\nEl Fit Score és '+r.score+'/100 ('+r.verdict+'). El motor la considera incompatible amb el projecte actual. Revisa el context o descarta el fitxatge.');
+    return;
+  }
+  if(r.score<70 && !confirm('Fit Score '+r.score+'/100 ('+r.verdict+'). No incompleix una norma dura, però és una operació molt discutible. Vols continuar?'))return;
+  state.transfers.push(t);state.shortlist.splice(i,1);save();
+};
 $('#findRealisticPlayersBtn').onclick=()=>findRealisticPlayers();$('#newTargetBtn').onclick=()=>analyseTarget();$('#analyseFromSearchBtn').onclick=()=>livePlayerSearch();$('#targetSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();livePlayerSearch();}};
 
-$('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',name:'player',full:1},{label:'Tipus',name:'type',type:'select',options:['Compra','Venda','Cessió entrada','Cessió sortida','Agent lliure','Oferta rebutjada']},{label:'Finestra',name:'window',type:'select',options:['Estiu','Hivern']},{label:'Club origen/destí',name:'club'},{label:'Import / oferta €M',name:'amount',type:'number',step:'.1'},{label:'Valor actual jugador €M',name:'playerValue',type:'number',step:'.1',optional:1},{label:'Salari €/set.',name:'wage',type:'number',optional:1},{label:'Edat',name:'age',type:'number',optional:1},{label:'Rol previst / actual',name:'role',type:'select',options:['Rotació','Titular','Aposta','No aplica']},{label:'Mercat',name:'market',type:'select',options:['Espanya','Portugal','Iberoamèrica','Altres','No aplica']},{label:'Context',name:'context',type:'select',options:['Normal','Lesió greu','Venda prèvia','Necessitat crítica','Oportunitat excepcional']},{label:'Nivell jugador (1-10)',name:'playerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Nivell club comprador (1-10)',name:'buyerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Anys de contracte restants',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},{label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'},{label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},{label:'Jugador símbol del projecte?',name:'symbol',type:'select',options:['No','Sí']},{label:'Reality Override?',name:'override',type:'select',options:['No','Sí']},{label:'Justificació / context',name:'reason',full:1}],d=>state.transfers.push(d));
+$('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',name:'player',full:1},{label:'Tipus',name:'type',type:'select',options:['Compra','Venda','Cessió entrada','Cessió sortida','Agent lliure','Oferta rebutjada']},{label:'Finestra',name:'window',type:'select',options:['Estiu','Hivern']},{label:'Club origen/destí',name:'club'},{label:'Import / oferta €M',name:'amount',type:'number',step:'.1'},{label:'Valor actual jugador €M',name:'playerValue',type:'number',step:'.1',optional:1},{label:'Salari €/set.',name:'wage',type:'number',optional:1},{label:'Edat',name:'age',type:'number',optional:1},{label:'Rol previst / actual',name:'role',type:'select',options:['Rotació','Titular','Aposta','No aplica']},{label:'Mercat',name:'market',type:'select',options:['Espanya','Portugal','Iberoamèrica','Altres','No aplica']},{label:'Context',name:'context',type:'select',options:['Normal','Lesió greu','Venda prèvia','Necessitat crítica','Oportunitat excepcional']},{label:'Nivell jugador (1-10)',name:'playerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Nivell club comprador (1-10)',name:'buyerLevel',type:'number',min:1,max:10,step:'.1',optional:1},{label:'Anys de contracte restants',name:'contractYears',type:'number',min:0,max:6,step:'.5',optional:1},{label:'Potencial extern utilitzat?',name:'hiddenPotential',type:'select',options:['No','Sí'],value:prefill.hiddenPotential||'No'},{label:'Jugador franquícia?',name:'franchise',type:'select',options:['No','Sí'],value:prefill.franchise||'No'},{label:'Jugador símbol del projecte?',name:'symbol',type:'select',options:['No','Sí']},{label:'Reality Override?',name:'override',type:'select',options:['No','Sí']},{label:'Justificació / context',name:'reason',full:1}],d=>{
+  const errors=validateTransferRules(d);
+  if(blockOperation(errors))return false;
+  state.transfers.push(d);
+  return true;
+});
 $('#addObjectiveBtn').onclick=()=>modal('Afegir objectiu',[{label:'Objectiu',name:'name',full:1},{label:'Detall',name:'detail',full:1},{label:'Progrés %',name:'progress',type:'number',min:0,max:100},{label:'Pes %',name:'weight',type:'number',min:0,max:100},{label:'Prioritat',name:'priority',type:'select',options:['Alta','Mitjana','Baixa']},{label:'Revisió',name:'review'}],d=>state.objectives.push({...d,progress:num(d.progress),weight:num(d.weight),status:'active'}));
-$('#addYouthBtn').onclick=()=>modal('Afegir jove',[{label:'Nom',name:'name',full:1},{label:'Edat',name:'age',type:'number'},{label:'Posició',name:'pos'},{label:'Origen',name:'origin'},{label:'OVR',name:'ovr',type:'number'},{label:'Minuts',name:'minutes',type:'number'},{label:'Aparicions',name:'appearances',type:'number'},{label:'Estat',name:'status',type:'select',options:['Cantera','Primer equip','Cedit']}],d=>state.youth.push(d));
+$('#addYouthBtn').onclick=()=>modal('Afegir jove',[{label:'Nom',name:'name',full:1},{label:'Edat',name:'age',type:'number'},{label:'Posició',name:'pos'},{label:'Origen',name:'origin'},{label:'OVR',name:'ovr',type:'number'},{label:'Minuts',name:'minutes',type:'number'},{label:'Aparicions',name:'appearances',type:'number'},{label:'Estat',name:'status',type:'select',options:['Cantera','Primer equip','Cedit']}],d=>{if(d.status==='Primer equip'&&state.youth.filter(y=>y.status==='Primer equip').length>=2){alert('⛔ PROMOCIÓ BLOQUEJADA\n\nLa normativa permet un màxim de 2 promocions significatives de cantera per temporada.');return false;}state.youth.push(d);return true;});
 $('#addSeasonBtn').onclick=()=>{const r=realism();modal('Tancar temporada',[{label:'Temporada',name:'season',full:1},{label:'Posició final',name:'position'},{label:'Resum',name:'summary',full:1}],d=>{const pos=num(d.position);const franchiseUsed=state.transfers.some(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)&&t.franchise==='Sí');state.history.unshift({...d,score:r.score,net:r.net,franchiseUsed,clubStatus:state.clubStatus});if(pos){let next=state.clubStatus;if(pos<=7)next=Math.max(next,5.4);else if(pos<=10)next=Math.max(next,5.2);else if(pos<=13)next=Math.max(next,5.0);else if(pos<=17)next=Math.max(4.5,Math.min(next,4.8));else next=Math.max(4.2,next-.2);state.clubStatus=Number(next.toFixed(1));}})};
 ['finInitialBudget','finBudget','finInitialWages','finWages','finExtraIncome'].forEach(id=>$('#'+id).onchange=e=>{const k={finInitialBudget:'initialBudget',finBudget:'budget',finInitialWages:'initialWages',finWages:'wages',finExtraIncome:'extraIncome'}[id];state.finance[k]=num(e.target.value);save()});$('#clubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};
 
