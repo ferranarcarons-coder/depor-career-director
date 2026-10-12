@@ -159,6 +159,22 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 .lineup-bench select{width:100%}
 @media(max-width:900px){.lineup-starters{grid-template-columns:repeat(2,minmax(0,1fr))}.lineup-bench{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.lineup-starters,.lineup-bench{grid-template-columns:1fr}}
+
+.lineup-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(280px,.8fr);gap:16px}
+.lineup-pitch-panel{overflow:hidden}
+.football-pitch{position:relative;min-height:690px;border-radius:18px;background:linear-gradient(180deg,#245f4e,#1f5647);border:2px solid rgba(255,255,255,.65);overflow:hidden;margin-top:10px}
+.football-pitch:before,.football-pitch:after{content:"";position:absolute;left:7%;right:7%;border:2px solid rgba(255,255,255,.55);height:18%;z-index:0}
+.football-pitch:before{top:0;border-top:0}.football-pitch:after{bottom:0;border-bottom:0}
+.pitch-center-line{position:absolute;left:0;right:0;top:50%;border-top:2px solid rgba(255,255,255,.55)}
+.pitch-center-circle{position:absolute;width:110px;height:110px;border:2px solid rgba(255,255,255,.55);border-radius:50%;left:50%;top:50%;transform:translate(-50%,-50%)}
+.pitch-slot{position:absolute;transform:translate(-50%,-50%);width:150px;z-index:2}
+.pitch-player-card{background:rgba(255,255,255,.96);border-radius:12px;padding:8px;box-shadow:0 5px 18px rgba(0,0,0,.14);border:1px solid rgba(20,50,90,.15)}
+.pitch-player-card small{display:block;font-size:8px;font-weight:900;color:var(--muted);margin-bottom:4px}
+.pitch-player-card select{width:100%;font-size:10px}
+.lineup-bench{display:grid;gap:8px}
+.lineup-summary{margin-top:16px;padding-top:14px;border-top:1px solid #e5eaf0;display:grid;gap:8px;font-size:11px;color:var(--muted)}
+@media(max-width:1050px){.lineup-layout{grid-template-columns:1fr}.football-pitch{min-height:640px}}
+@media(max-width:620px){.football-pitch{min-height:580px}.pitch-slot{width:118px}.pitch-player-card{padding:6px}.pitch-player-card select{font-size:9px}}
 </style>
 </head>
 <body>
@@ -176,17 +192,18 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     </div>
 
     <nav id="nav">
-      <button class="active" data-view="dashboard" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('dashboard');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>01</span>Dashboard</button>
-      <button data-view="squad" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('squad');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>02</span>Plantilla</button>
-      <button data-view="transferlab" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('transferlab');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>03</span>Director AI</button>
-      <button data-view="transfers" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('transfers');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>04</span>Mercat</button>
-      <button data-view="finance" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('finance');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>04</span>Finances</button>
-      <button data-view="objectives" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('objectives');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>05</span>Objectius</button>
-      <button data-view="youth" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('youth');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>06</span>Cantera</button>
-      <button data-view="history" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('history');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>07</span>Històric</button>
-      <button data-view="rules" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('rules');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>08</span>Normes</button>
-      <button data-view="decisions" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('decisions');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>09</span>Decisions</button>
-      <button data-view="setup" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(v){v.classList.remove('active')});var target=document.getElementById('setup');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();"><span>10</span>Setup</button>
+      <button class="active" data-view="dashboard" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('dashboard');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('dashboard'==='lineup'){renderLineupEditor();}"><span>01</span>Dashboard</button>
+      <button data-view="squad" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('squad');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('squad'==='lineup'){renderLineupEditor();}"><span>02</span>Plantilla</button>
+      <button data-view="lineup" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('lineup');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('lineup'==='lineup'){renderLineupEditor();}"><span>03</span>Alineació</button>
+      <button data-view="transferlab" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('transferlab');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('transferlab'==='lineup'){renderLineupEditor();}"><span>04</span>Director AI</button>
+      <button data-view="transfers" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('transfers');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('transfers'==='lineup'){renderLineupEditor();}"><span>05</span>Mercat</button>
+      <button data-view="finance" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('finance');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('finance'==='lineup'){renderLineupEditor();}"><span>06</span>Finances</button>
+      <button data-view="objectives" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('objectives');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('objectives'==='lineup'){renderLineupEditor();}"><span>07</span>Objectius</button>
+      <button data-view="youth" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('youth');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('youth'==='lineup'){renderLineupEditor();}"><span>08</span>Cantera</button>
+      <button data-view="history" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('history');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('history'==='lineup'){renderLineupEditor();}"><span>09</span>Històric</button>
+      <button data-view="rules" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('rules');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('rules'==='lineup'){renderLineupEditor();}"><span>10</span>Normes</button>
+      <button data-view="decisions" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('decisions');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('decisions'==='lineup'){renderLineupEditor();}"><span>11</span>Decisions</button>
+      <button data-view="setup" onclick="document.querySelectorAll('#nav button').forEach(function(x){x.classList.remove('active')});this.classList.add('active');document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});var target=document.getElementById('setup');if(target)target.classList.add('active');var title=document.getElementById('pageTitle');if(title)title.textContent=this.textContent.replace(/^\\d+/,'').trim();if('setup'==='lineup'){renderLineupEditor();}"><span>12</span>Setup</button>
     </nav>
 
     <div class="sidebar-actions">
@@ -332,18 +349,11 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
             </select>
           </label>
           <button type="button" class="ghost-btn" id="analyzeSquadBtn" onclick="renderSquadAnalysis(true)">Analitzar plantilla</button>
-          <button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button>
+          <button type="button" class="ghost-btn" id="enrichSquadBtn">Enriquir amb BBDD FC27</button><button class="ghost-btn" id="batchOvrBtn">Actualitzar OVR</button>
           <button class="primary" id="addPlayerBtn">+ Afegir jugador</button>
         </div>
       </div>
-      <div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div>
-      <div id="lineupPanel" class="panel lineup-panel">
-        <div class="panel-head"><div><p class="eyebrow">MATCH PLAN</p><h2>XI titular i banqueta</h2></div><span id="lineupTacticTag">4-3-3</span></div>
-        <p class="helper">Defineix qui consideres titular i qui tens a la banqueta. El Director AI utilitzarà aquesta jerarquia per analitzar vendes, cessions i necessitats de mercat.</p>
-        <div id="lineupStarters" class="lineup-starters"></div>
-        <div class="lineup-bench-head"><strong>Banqueta</strong><small>Fins a 9 suplents</small></div>
-        <div id="lineupBench" class="lineup-bench"></div>
-      </div>
+      <div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div><div id="squadEnrichStatus" class="sync-banner hidden"></div>
       <div id="squadAnalysisPanel" class="panel squad-analysis-panel">
         <div class="panel-head"><div><p class="eyebrow">SPORTING DIRECTOR REVIEW</p><h2>Anàlisi de plantilla</h2></div><span id="squadAnalysisTactic">4-3-3</span></div>
         <div id="squadAnalysisContent" class="squad-analysis-content"><p>Carrega la plantilla i prem “Analitzar plantilla” per rebre una recomanació esportiva segons el sistema de joc.</p></div>
@@ -380,6 +390,32 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
       <div class="table-wrap"><table><thead><tr><th>Jugador</th><th>Pos.</th><th>OVR</th><th>Minuts</th><th>Gols</th><th>Assist.</th><th>G+A</th><th></th></tr></thead><tbody id="performanceTable"></tbody></table></div>
     </section>
 
+
+    <section id="lineup" class="view">
+      <div class="section-toolbar">
+        <div><p class="eyebrow">MATCH PLAN</p><h2>Alineació</h2><p>Defineix visualment l'XI titular i la banqueta. Aquesta jerarquia alimenta l'anàlisi esportiva i el Director AI.</p></div>
+        <label style="min-width:150px">Sistema base
+          <select id="lineupTacticSelect">
+            <option selected>4-3-3</option><option>4-2-3-1</option><option>4-4-2</option><option>3-4-3</option><option>3-5-2</option><option>4-1-4-1</option><option>4-3-2-1</option><option>5-3-2</option>
+          </select>
+        </label>
+      </div>
+      <div class="lineup-layout">
+        <article class="panel lineup-pitch-panel">
+          <div class="panel-head"><div><p class="eyebrow">STARTING XI</p><h2>Onze titular</h2></div><span id="lineupTacticTag">4-3-3</span></div>
+          <div class="football-pitch" id="lineupPitch">
+            <div class="pitch-center-line"></div><div class="pitch-center-circle"></div>
+            <div class="pitch-box pitch-box-top"></div><div class="pitch-box pitch-box-bottom"></div>
+            <div id="pitchSlots"></div>
+          </div>
+        </article>
+        <aside class="panel lineup-side-panel">
+          <div class="panel-head"><div><p class="eyebrow">BENCH</p><h2>Banqueta</h2></div><span>9 SUPLENTS</span></div>
+          <div id="lineupBench" class="lineup-bench"></div>
+          <div class="lineup-summary" id="lineupSummary"></div>
+        </aside>
+      </div>
+    </section>
 
     <section id="transferlab" class="view">
 <div class="section-toolbar"><div><p class="eyebrow">SPORTING DIRECTOR ASSISTANT</p><h2>Director AI</h2><p>Parla amb el director esportiu sobre fitxatges, vendes, cessions, ofertes i necessitats de plantilla.</p></div><button class="ghost-btn" id="clearDirectorChatBtn">Netejar xat</button></div>
@@ -995,6 +1031,101 @@ function cleanPlayerQuery(text){return String(text||'').replace(/\b(veus|creus|s
 async function directorSigningAdvice(text){const q=cleanPlayerQuery(text);if(q.length<2)return {label:'NECESSITO EL NOM',cls:'warn',text:'Digues-me quin jugador estàs valorant.'};const sr=await fetch('/api/players/search?q='+encodeURIComponent(q));const sd=await sr.json();const ref=(sd.players||[])[0];if(!ref)return {label:'NO TROBAT',cls:'warn',text:'No he trobat aquest jugador a la BBDD FC27.'};const dr=await fetch('/api/players/detail?'+new URLSearchParams({id:ref.id||'',name:ref.name||''}));const dd=await dr.json();const p=dd.player||ref;const current=careerOvrForName(p.name,p.overall)||p.overall;const expected=num(current)>=80?'Titular':num(current)>=75?'Rotació':'Aposta';const a={player:p.name,position:p.position,age:p.age,club:p.club,market:inferMarketFromNationality(p.nationality),playerLevel:overallToLevel(current),originLevel:inferOriginLevel(p.club,p.league,current),overall:current,currentRole:'Titular',expectedRole:expected,type:'Compra',hiddenPotential:'No',franchise:'No',context:'Normal',override:'No'};const r=transferFit(a);return {label:r.verdict.toUpperCase()+' · '+r.score+'/100',cls:r.cls,text:r.recommend+(r.reasons.length?' '+r.reasons.slice(0,3).join(' · '):'')}}
 async function directorPositionAdvice(pos){const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=5');const d=await r.json();const list=d.players||[];if(!list.length)return {label:'SENSE CANDIDATS',cls:'warn',text:'No he trobat candidats adequats.'};return {label:'TOP '+pos,cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · '+p.club+' · OVR '+p.overall+' · Fit '+p.scoutingScore+'/100').join('<br>')}}
 function squadSellCandidates(mode){if(!state.squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};const list=state.squad.map(p=>({p,a:outgoingAdvice(p,mode)})).sort((x,y)=>y.a.score-x.a.score).slice(0,5);return {label:mode==='loan'?'CANDIDATS A CESSIÓ':'CANDIDATS A VENDA',cls:'good',text:list.map((x,i)=>(i+1)+'. '+x.p.name+' · '+x.a.label+' · '+x.a.score+'/100 · '+x.a.text).join('<br><br>')}}
+function normalizeNameForMatch(v){return normalizeDirectorText(v).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
+async function enrichSquadFromFc27(){
+  const btn=$('#enrichSquadBtn'),status=$('#squadEnrichStatus');
+  if(btn)btn.disabled=true;
+  if(status){status.className='sync-banner';status.textContent='Encreuant la plantilla amb la BBDD FC27…';}
+  let matched=0,unmatched=0;
+  const players=activeSquad();
+  for(let i=0;i<players.length;i++){
+    const p=players[i];
+    try{
+      if(status)status.textContent='BBDD FC27 · '+(i+1)+'/'+players.length+' · '+p.name;
+      const sr=await fetch('/api/players/search?q='+encodeURIComponent(p.name));
+      if(!sr.ok)throw new Error('search');
+      const sd=await sr.json(),list=sd.players||[];
+      const target=normalizeNameForMatch(p.name);
+      let ref=list.find(x=>normalizeNameForMatch(x.name)===target);
+      if(!ref && list.length===1)ref=list[0];
+      if(!ref){unmatched++;continue;}
+      const dr=await fetch('/api/players/detail?'+new URLSearchParams({id:ref.id||'',name:ref.name||''}));
+      if(!dr.ok){unmatched++;continue;}
+      const dd=await dr.json(),d=dd.player||ref;
+      const idx=state.squad.findIndex(x=>x.playerId===p.playerId);if(idx<0)continue;
+      state.squad[idx]={...state.squad[idx],
+        fc27Id:d.id||'',fc27Matched:true,fc27Name:d.name||'',realClub:d.club||'',realLeague:d.league||'',
+        nationality:d.nationality||'',birthdate:d.birthdate||'',preferredFoot:d.preferredFoot||'',
+        alternatePositions:d.alternatePositions||'',heightCm:d.heightCm||null,weightKg:d.weightKg||null,
+        playstyles:d.playstyles||'',pace:d.pace||null,shooting:d.shooting||null,passing:d.passing||null,
+        dribbling:d.dribbling||null,defending:d.defending||null,physicality:d.physicality||null,
+        age:num(state.squad[idx].age)||num(d.age),baseOvr:playerBaseOvr(state.squad[idx])||num(d.overall)
+      };
+      matched++;
+    }catch(e){unmatched++;}
+  }
+  ensureSquadIds();localStorage.setItem(KEY,JSON.stringify(state));render();await syncDedicatedSquad(true);
+  if(status){status.className='sync-banner '+(unmatched?'warn':'ok');status.textContent='BBDD FC27 · '+matched+' vinculats · '+unmatched+' sense match segur';}
+  if(btn)btn.disabled=false;
+}
+function lineupStarterIdSet(){return new Set(Object.values(state.lineup?.starters||{}).filter(Boolean))}
+function lineupBenchIdSet(){return new Set((state.lineup?.bench||[]).filter(Boolean))}
+function roleWeight(role){
+  const r=normalizeDirectorText(role);
+  if(r.includes('clave'))return 5;if(r.includes('importante'))return 4;if(r.includes('rotacion'))return 3;if(r.includes('ocasional'))return 2;if(r.includes('promesa'))return 1;return 3;
+}
+function wageHierarchyAnalysis(){
+  const s=activeSquad().filter(p=>num(p.wage)>0);
+  if(!s.length)return {score:50,issues:['No hi ha salaris suficients per analitzar la jerarquia.']};
+  const sorted=[...s].sort((a,b)=>num(b.wage)-num(a.wage));
+  const starters=lineupStarterIdSet(),issues=[];let score=100;
+  sorted.forEach((p,i)=>{
+    const rank=i+1,rw=roleWeight(p.role),starter=starters.has(p.playerId);
+    if(rank<=5 && rw<=2){score-=12;issues.push(p.name+' és Top '+rank+' salarial amb rol '+(p.role||'baix')+'.');}
+    if(rank<=3 && !starter && rw<=3){score-=10;issues.push(p.name+' és Top '+rank+' salarial però no forma part de l’XI titular.');}
+    if(rw>=5 && rank>Math.ceil(s.length*.55)){score-=6;issues.push(p.name+' és Clave però està a la meitat baixa salarial.');}
+  });
+  return {score:Math.max(0,score),issues:issues.slice(0,5),top:sorted.slice(0,5)};
+}
+function ageStructureAnalysis(){
+  const s=activeSquad(),starters=lineupStarterIdSet();
+  const allAges=s.map(p=>num(p.age)).filter(Boolean),xi=s.filter(p=>starters.has(p.playerId)).map(p=>num(p.age)).filter(Boolean);
+  const avg=allAges.length?allAges.reduce((a,b)=>a+b,0)/allAges.length:0,xiAvg=xi.length?xi.reduce((a,b)=>a+b,0)/xi.length:0;
+  const veterans=s.filter(p=>num(p.age)>=30),young=s.filter(p=>num(p.age)<=23),issues=[];let score=100;
+  if(xiAvg>29){score-=15;issues.push('XI titular envellit: '+xiAvg.toFixed(1)+' anys de mitjana.');}
+  if(veterans.filter(p=>starters.has(p.playerId)).length>=4){score-=12;issues.push('Hi ha 4 o més titulars de 30+ anys.');}
+  if(young.length<3){score-=8;issues.push('Poca base jove: només '+young.length+' jugadors de 23 anys o menys.');}
+  return {score:Math.max(0,score),avg,xiAvg,veterans,young,issues};
+}
+function contractRiskAnalysis(){
+  const starters=lineupStarterIdSet(),issues=[];let score=100;
+  activeSquad().forEach(p=>{
+    if(p.ownership==='Cedit al Dépor')return;
+    const y=num(p.contractYears),important=roleWeight(p.role)>=4||starters.has(p.playerId);
+    if(important&&y>0&&y<=1){score-=16;issues.push(p.name+' és important i acaba contracte en ≤1 any.');}
+    else if(important&&y>1&&y<=2){score-=7;issues.push(p.name+' entra en zona de renovació: '+y+' anys de contracte.');}
+  });
+  return {score:Math.max(0,score),issues:issues.slice(0,5)};
+}
+function emotionalFitAnalysis(){
+  const linked=activeSquad().filter(p=>String(p.favoriteClub||'').trim());
+  const depor=linked.filter(p=>normalizeDirectorText(p.favoriteClub).includes('depor'));
+  return {known:linked.length,depor:depor.length,names:depor.map(p=>p.name)};
+}
+function deepSquadAnalysis(){
+  const baseA=squadFormationAnalysis();
+  if(baseA.label==='PLANTILLA PENDENT')return baseA;
+  const wage=wageHierarchyAnalysis(),age=ageStructureAnalysis(),contract=contractRiskAnalysis(),emotion=emotionalFitAnalysis();
+  const dbMatched=activeSquad().filter(p=>p.fc27Matched).length;
+  const overall=Math.round((wage.score*.30)+(age.score*.20)+(contract.score*.20)+((baseA.cls==='good'?90:65)*.30));
+  const strengths=[],risks=[];
+  if(wage.score>=85)strengths.push('Jerarquia salarial coherent amb el pes esportiu.');
+  if(age.score>=85)strengths.push('Estructura d’edats equilibrada.');
+  if(contract.score>=85)strengths.push('Sense riscos contractuals greus entre peces importants.');
+  if(emotion.depor)strengths.push(emotion.depor+' jugador(s) amb vincle declarat amb el Dépor: '+emotion.names.join(', ')+'.');
+  risks.push(...wage.issues,...age.issues,...contract.issues);
+  return {...baseA,overall,wage,age,contract,emotion,dbMatched,strengths,risks:risks.slice(0,8)};
+}
 function canonicalPos(pos){
   const p=normalizeDirectorText(pos).toUpperCase().replace(/\s+/g,'');
   const map={POR:'GK',GK:'GK',LD:'RB',RB:'RB',CAD:'RB',LI:'LB',LB:'LB',CAI:'LB',DFC:'CB',CB:'CB',CENTRAL:'CB',
@@ -1066,47 +1197,53 @@ function normalizeLineupForTactic(){
   for(const k of Object.keys(state.lineup.starters))if(!activeIds.has(state.lineup.starters[k]))state.lineup.starters[k]='';
   state.lineup.bench=state.lineup.bench.filter(id=>activeIds.has(id));
 }
+function pitchCoordinates(tactic){
+  const maps={
+    '4-3-3':[[50,91],[15,72],[37,76],[63,76],[85,72],[31,50],[69,50],[50,38],[82,20],[18,20],[50,12]],
+    '4-2-3-1':[[50,91],[15,72],[37,76],[63,76],[85,72],[37,54],[63,54],[50,38],[82,26],[18,26],[50,12]],
+    '4-4-2':[[50,91],[15,72],[37,76],[63,76],[85,72],[16,46],[39,50],[61,50],[84,46],[38,18],[62,18]],
+    '3-4-3':[[50,91],[25,74],[50,77],[75,74],[14,48],[38,50],[62,50],[86,48],[82,20],[18,20],[50,12]],
+    '3-5-2':[[50,91],[25,74],[50,77],[75,74],[13,47],[34,49],[50,42],[66,49],[87,47],[38,17],[62,17]],
+    '4-1-4-1':[[50,91],[15,72],[37,76],[63,76],[85,72],[50,57],[15,39],[38,42],[62,42],[85,39],[50,13]],
+    '4-3-2-1':[[50,91],[15,72],[37,76],[63,76],[85,72],[30,52],[50,57],[70,52],[37,30],[63,30],[50,12]],
+    '5-3-2':[[50,91],[10,70],[30,76],[50,78],[70,76],[90,70],[30,48],[50,53],[70,48],[38,17],[62,17]]
+  };
+  return maps[tactic]||maps['4-3-3'];
+}
 function renderLineupEditor(){
-  const startersBox=$('#lineupStarters'),benchBox=$('#lineupBench'),tag=$('#lineupTacticTag');
-  if(!startersBox||!benchBox)return;
+  const pitch=$('#pitchSlots'),benchBox=$('#lineupBench'),tag=$('#lineupTacticTag'),summary=$('#lineupSummary');
+  if(!pitch||!benchBox)return;
   normalizeLineupForTactic();
   const tactic=state.tactic||'4-3-3';if(tag)tag.textContent=tactic;
-  const slots=formationSlots(tactic),keys=lineupSlotKeys(tactic);
+  if($('#lineupTacticSelect'))$('#lineupTacticSelect').value=tactic;
+  const slots=formationSlots(tactic),keys=lineupSlotKeys(tactic),coords=pitchCoordinates(tactic);
   const starterIds=Object.values(state.lineup.starters||{}).filter(Boolean);
-  startersBox.innerHTML=slots.map((slot,i)=>{
+  pitch.innerHTML=slots.map((slot,i)=>{
     const key=keys[i],current=state.lineup.starters[key]||'';
     const repeatedIndex=slots.slice(0,i+1).filter(s=>s===slot).length-1;
-    return '<div class="lineup-slot"><label>'+spanishSlotLabel(slot,repeatedIndex)+'<select data-lineup-slot="'+key+'">'+lineupPlayerOptions(current,[...starterIds,...state.lineup.bench])+'</select></label></div>';
+    const xy=coords[i]||[50,50];
+    return '<div class="pitch-slot" style="left:'+xy[0]+'%;top:'+xy[1]+'%"><div class="pitch-player-card"><small>'+spanishSlotLabel(slot,repeatedIndex)+'</small><select data-lineup-slot="'+key+'">'+lineupPlayerOptions(current,[...starterIds,...state.lineup.bench])+'</select></div></div>';
   }).join('');
-  const usedStarter=new Set(Object.values(state.lineup.starters||{}).filter(Boolean));
-  const bench=state.lineup.bench||[];
+  const usedStarter=new Set(Object.values(state.lineup.starters||{}).filter(Boolean)),bench=state.lineup.bench||[];
   benchBox.innerHTML=Array.from({length:9},(_,i)=>{
     const current=bench[i]||'';
     return '<select data-bench-index="'+i+'">'+lineupPlayerOptions(current,[...usedStarter,...bench])+'</select>';
   }).join('');
+  const filled=starterIds.length,xiPlayers=starterIds.map(playerById).filter(Boolean);
+  const avg=xiPlayers.length?xiPlayers.reduce((a,p)=>a+playerCareerOvr(p),0)/xiPlayers.length:0;
+  if(summary)summary.innerHTML='<strong>'+filled+'/11 titulars definits</strong><span>OVR mitjà XI: '+(avg?avg.toFixed(1):'—')+'</span><span>Banqueta: '+bench.filter(Boolean).length+'/9</span>';
   $$('[data-lineup-slot]').forEach(sel=>sel.onchange=()=>{
-    const key=sel.dataset.lineupSlot;
-    const prev=state.lineup.starters[key]||'';
-    const next=sel.value||'';
-    if(next){
-      for(const k of Object.keys(state.lineup.starters))if(k!==key&&state.lineup.starters[k]===next)state.lineup.starters[k]='';
-      state.lineup.bench=state.lineup.bench.map(x=>x===next?'':x).filter(Boolean);
-    }
-    state.lineup.starters[key]=next;
-    save();
+    const key=sel.dataset.lineupSlot,next=sel.value||'';
+    if(next){for(const k of Object.keys(state.lineup.starters))if(k!==key&&state.lineup.starters[k]===next)state.lineup.starters[k]='';state.lineup.bench=state.lineup.bench.map(x=>x===next?'':x).filter(Boolean);}
+    state.lineup.starters[key]=next;save();
   });
   $$('[data-bench-index]').forEach(sel=>sel.onchange=()=>{
-    const idx=Number(sel.dataset.benchIndex),next=sel.value||'';
-    const bench=[...(state.lineup.bench||[])];
-    if(next){
-      for(const k of Object.keys(state.lineup.starters))if(state.lineup.starters[k]===next)state.lineup.starters[k]='';
-      for(let j=0;j<bench.length;j++)if(j!==idx&&bench[j]===next)bench[j]='';
-    }
-    bench[idx]=next;
-    state.lineup.bench=bench.filter(Boolean);
-    save();
+    const idx=Number(sel.dataset.benchIndex),next=sel.value||'',b=[...(state.lineup.bench||[])];
+    if(next){for(const k of Object.keys(state.lineup.starters))if(state.lineup.starters[k]===next)state.lineup.starters[k]='';for(let j=0;j<b.length;j++)if(j!==idx&&b[j]===next)b[j]='';}
+    b[idx]=next;state.lineup.bench=b.filter(Boolean);save();
   });
 }
+
 function buildBestXI(){
   const tactic=state.tactic||'4-3-3';
   const slots=formationSlots(tactic),keys=lineupSlotKeys(tactic);
@@ -1155,24 +1292,31 @@ function squadFormationAnalysis(){
       '<br><br>OVR mitjà XI: '+(avgXI?avgXI.toFixed(1):'—')+'.'
   };
 }
-function renderSquadAnalysis(){
+function renderSquadAnalysis(scroll=false){
   const box=$('#squadAnalysisContent'),tag=$('#squadAnalysisTactic');if(!box)return;
   if(tag)tag.textContent=state.tactic||'4-3-3';
-  const a=squadFormationAnalysis();
+  const a=deepSquadAnalysis();
   if(a.label==='PLANTILLA PENDENT'){box.innerHTML='<p>'+a.text+'</p>';return;}
-  const xi=buildBestXI();
-  const missing=xi.filter(x=>!x.p).length;
-  const sell=activeSquad().map(p=>({p,a:outgoingAdvice(p,'sell')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
-  const loan=activeSquad().map(p=>({p,a:outgoingAdvice(p,'loan')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
+  const strengths=a.strengths.length?a.strengths.join('<br>'):'Encara no hi ha prou senyals positius per destacar-ne cap.';
+  const risks=a.risks.length?a.risks.join('<br>'):'No detecto cap risc estructural important amb les dades actuals.';
   box.innerHTML='<div class="squad-analysis-grid">'+
-    '<div class="squad-analysis-card"><strong>Encaix tàctic</strong><p>'+(missing?missing+' posicions de l’XI sense perfil natural.':'XI complet amb perfils naturals o compatibles.')+'</p></div>'+
-    '<div class="squad-analysis-card"><strong>Vendes</strong><p>'+(sell.length?sell.map(x=>x.p.name+' ('+x.a.score+'/100)').join(' · '):'Cap venda prioritària.')+'</p></div>'+
-    '<div class="squad-analysis-card"><strong>Cessions</strong><p>'+(loan.length?loan.map(x=>x.p.name+' ('+x.a.score+'/100)').join(' · '):'Cap cessió prioritària.')+'</p></div></div>'+
-    '<div class="squad-analysis-list"><div class="squad-analysis-item">'+a.text+'</div></div>';
+    '<div class="squad-analysis-card"><strong>Índex estructura</strong><p>'+a.overall+'/100 · '+(a.overall>=85?'molt sòlida':a.overall>=70?'coherent amb punts a revisar':'necessita decisions')+'</p></div>'+
+    '<div class="squad-analysis-card"><strong>Jerarquia salarial</strong><p>'+a.wage.score+'/100</p></div>'+
+    '<div class="squad-analysis-card"><strong>Edat i successió</strong><p>'+a.age.score+'/100 · plantilla '+(a.age.avg?a.age.avg.toFixed(1):'—')+' anys · XI '+(a.age.xiAvg?a.age.xiAvg.toFixed(1):'—')+'</p></div>'+
+    '<div class="squad-analysis-card"><strong>Contractes</strong><p>'+a.contract.score+'/100</p></div>'+
+    '<div class="squad-analysis-card"><strong>BBDD real</strong><p>'+a.dbMatched+'/'+activeSquad().length+' jugadors vinculats a FC27</p></div>'+
+    '<div class="squad-analysis-card"><strong>Vincle emocional</strong><p>'+a.emotion.known+' informats · '+a.emotion.depor+' vinculats al Dépor</p></div></div>'+
+    '<div class="squad-analysis-list">'+
+      '<div class="squad-analysis-item"><strong>Fortaleses</strong><br>'+strengths+'</div>'+
+      '<div class="squad-analysis-item"><strong>Riscos / decisions</strong><br>'+risks+'</div>'+
+      '<div class="squad-analysis-item">'+a.text+'</div>'+
+    '</div>';
+  if(scroll)$('#squadAnalysisPanel')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
+
 async function directorReply(text){
  const t=normalizeDirectorText(text),pos=positionFromText(text);
- if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica'))return squadFormationAnalysis();
+ if((t.includes('plantilla')&&(t.includes('faries')||t.includes('analitz')||t.includes('analiza')||t.includes('recoman'))) || t.includes('segons la tactica'))return deepSquadAnalysis();
  if(pos&&(t.includes('busco')||t.includes('necessit')||t.includes('reforc')||t.includes('reforz')))return directorPositionAdvice(pos);
  const player=findSquadPlayerFromText(text);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
@@ -1356,6 +1500,7 @@ window.editSquadPlayer=i=>{
     {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC'],value:p.pos||'POR'},
     {label:'Edat',name:'age',type:'number',value:p.age||''},
     {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:p.role||'Rotación'},
+    {label:'Club preferit / vincle emocional',name:'favoriteClub',value:p.favoriteClub||'',optional:1,placeholder:'Ex.: Deportivo'},
     {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor','Cedit fora'],value:p.ownership||'Propietat'},
     {label:'Club propietari (si és cessió entrant)',name:'parentClub',value:p.parentClub||'',optional:1},
     {label:'Club destí (si està cedit fora)',name:'destinationClub',value:p.destinationClub||'',optional:1},
@@ -1412,6 +1557,7 @@ $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[
  {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC']},
  {label:'Edat',name:'age',type:'number'},
  {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:'Rotación'},
+ {label:'Club preferit / vincle emocional',name:'favoriteClub',optional:1,placeholder:'Ex.: Deportivo'},
  {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Dépor','Cedit fora'],value:'Propietat'},
  {label:'Club propietari (si és cessió entrant)',name:'parentClub',optional:1},
  {label:'Club destí (si està cedit fora)',name:'destinationClub',optional:1},
@@ -1582,7 +1728,7 @@ $('#editStandingsBtn').onclick=()=>modal('Actualitzar classificació',[{label:'E
 const addDecision=()=>modal('Nova decisió pendent',[{label:'Títol',name:'title',full:1},{label:'Tipus',name:'type',type:'select',options:['Mercat','Contracte','Plantilla','Cantera','Finances','Objectius','Projecte']},{label:'Context',name:'detail',type:'textarea',full:1,placeholder:'Què està passant i quina decisió hem de prendre?'},{label:'Recomanació inicial',name:'recommendation',full:1,optional:1},{label:'Data límit',name:'deadline',optional:1}],d=>state.decisions.unshift({...d,status:'open',createdAt:new Date().toLocaleDateString('ca-ES')}));$('#addDecisionBtn').onclick=addDecision;$('#addDecisionPageBtn').onclick=addDecision;
 window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
-$('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#analyzeSquadBtn').onclick=()=>{renderSquadAnalysis(true);$('#squadAnalysisPanel')?.scrollIntoView({behavior:'smooth',block:'start'});};
+$('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#lineupTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#enrichSquadBtn').onclick=()=>enrichSquadFromFc27();$('#analyzeSquadBtn').onclick=()=>renderSquadAnalysis(true);
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
 ensureSquadIds();lastSquadFingerprint=squadFingerprint(state.squad);
 nav();render();renderSquadTablesOnly();renderLineupEditor();setTimeout(()=>{renderSquadTablesOnly();renderLineupEditor();},50);
