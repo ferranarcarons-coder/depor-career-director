@@ -448,7 +448,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     <section id="finance" class="view">
       <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Tu només fixes el pressupost inicial. La resta es calcula automàticament amb plantilla, salaris, renovacions i operacions de mercat.</p></div></div>
       <div class="form-grid panel">
-        <label>Pressupost inicial EA (€M)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn">Guardar i recalcular</button></div></label>
+        <label>Pressupost inicial EA (€ o M€)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn">Guardar i recalcular</button></div></label>
         <label>Pressupost inicial disponible<input id="finOperationalOpening" type="text" readonly></label>
         <label>Pressupost disponible ara<input id="finBudget" type="text" readonly></label>
         <label>Massa salarial inicial<input id="finInitialWages" type="text" readonly></label>
@@ -467,18 +467,28 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
       if(!btn||!input)return;
       async function commitBudget(ev){
         if(ev)ev.preventDefault();
-        var value=Number(String(input.value||'').replace(',','.'));
-        if(!Number.isFinite(value)||value<=0){
+        var rawValue=Number(String(input.value||'').replace(',','.'));
+        if(!Number.isFinite(rawValue)||rawValue<=0){
           if(status){status.className='sync-banner warn';status.textContent='Introdueix un pressupost inicial superior a 0.';}
           return;
         }
+        // Accept either full euros (11304769) or millions (11.304769).
+        var value=rawValue>100000?rawValue/1000000:rawValue;
         btn.disabled=true;btn.textContent='Guardant…';
         if(status){status.className='sync-banner';status.textContent='Guardant pressupost al servidor…';}
         try{
           var response=await fetch('/api/finance/budget',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initialBudget:value})});
           var data=await response.json();
           if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
-          if(status){status.className='sync-banner ok';status.textContent='Guardat correctament. Recalculant finances…';}
+          // Keep local state aligned so it cannot override the server value on reload.
+          try{
+            var key='deporCareerDirectorV1';
+            var local=JSON.parse(localStorage.getItem(key)||'{}');
+            local.finance=Object.assign({},local.finance||{},{initialBudget:value,budgetSource:'EA available transfer budget'});
+            local._clientUpdatedAt=Number(data.updatedAt||Date.now());
+            localStorage.setItem(key,JSON.stringify(local));
+          }catch(_e){}
+          if(status){status.className='sync-banner ok';status.textContent='Guardat: €'+(value*1000000).toLocaleString('es-ES',{maximumFractionDigits:0})+' · Recalculant finances…';}
           setTimeout(function(){window.location.reload();},350);
         }catch(err){
           btn.disabled=false;btn.textContent='Guardar i recalcular';
