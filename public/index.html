@@ -1367,7 +1367,7 @@ function renewalAdvice(p,text){
   const hierarchy=requested>0&&top>0?requested/top:null;
   const bonusVsAnnual=requested>0&&bonus>0?bonus/(requested*52):null;
   const lowImportance=importance<45, mediumImportance=importance>=45&&importance<65, keyPlayer=importance>=65;
-  const maxRise=lowImportance?.08:mediumImportance?.15:.25;
+  const maxRise=lowImportance ? .08 : mediumImportance ? .15 : .25;
   const sportingCeiling=currentWage>0?Math.round((currentWage*(1+maxRise))/100)*100:0;
   const hierarchyCeiling=top>0?Math.floor((top*1.10)/100)*100:0;
   const ceiling=sportingCeiling&&hierarchyCeiling?Math.min(sportingCeiling,hierarchyCeiling):(sportingCeiling||hierarchyCeiling);
