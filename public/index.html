@@ -448,7 +448,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
     <section id="finance" class="view">
       <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Tu només fixes el pressupost inicial. La resta es calcula automàticament amb plantilla, salaris, renovacions i operacions de mercat.</p></div></div>
       <div class="form-grid panel">
-        <label>Pressupost inicial EA (€M)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn" onclick="saveInitialBudget()">Guardar i recalcular</button></div></label>
+        <label>Pressupost inicial EA (€M)<div style="display:flex;gap:8px"><input id="finInitialBudget" type="number" step="0.1" min="0"><button type="button" class="primary" id="saveInitialBudgetBtn">Guardar i recalcular</button></div></label>
         <label>Pressupost operatiu inicial (70%)<input id="finOperationalOpening" type="text" readonly></label>
         <label>Pressupost disponible ara<input id="finBudget" type="text" readonly></label>
         <label>Massa salarial inicial<input id="finInitialWages" type="text" readonly></label>
@@ -459,6 +459,36 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
       <article class="panel finance-summary"><div class="panel-head"><div><p class="eyebrow">LIVE FINANCIAL MODEL</p><h2>Resum financer automàtic</h2></div><span>CALCULAT</span></div><div id="financeSummary"></div></article>
       <article class="panel finance-summary"><div class="panel-head"><div><p class="eyebrow">AUDIT TRAIL</p><h2>Moviments que expliquen el pressupost</h2></div></div><div id="financeLedger"></div></article>
     </section>
+    <script>
+    (function(){
+      var btn=document.getElementById('saveInitialBudgetBtn');
+      var input=document.getElementById('finInitialBudget');
+      var status=document.getElementById('financeSaveStatus');
+      if(!btn||!input)return;
+      async function commitBudget(ev){
+        if(ev)ev.preventDefault();
+        var value=Number(String(input.value||'').replace(',','.'));
+        if(!Number.isFinite(value)||value<=0){
+          if(status){status.className='sync-banner warn';status.textContent='Introdueix un pressupost inicial superior a 0.';}
+          return;
+        }
+        btn.disabled=true;btn.textContent='Guardant…';
+        if(status){status.className='sync-banner';status.textContent='Guardant pressupost al servidor…';}
+        try{
+          var response=await fetch('/api/finance/budget',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({initialBudget:value})});
+          var data=await response.json();
+          if(!response.ok)throw new Error(data.error||('HTTP '+response.status));
+          if(status){status.className='sync-banner ok';status.textContent='Guardat correctament. Recalculant finances…';}
+          setTimeout(function(){window.location.reload();},350);
+        }catch(err){
+          btn.disabled=false;btn.textContent='Guardar i recalcular';
+          if(status){status.className='sync-banner warn';status.textContent='Error: '+err.message;}
+        }
+      }
+      btn.onclick=commitBudget;
+      input.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();commitBudget(e);}});
+    })();
+    </script>
 
     <section id="objectives" class="view">
       <div class="section-toolbar"><div><p class="eyebrow">BOARD EXPECTATIONS</p><h2>Objectius</h2><p>Els objectius que realment governaran la partida.</p></div><button class="primary" id="addObjectiveBtn">+ Afegir objectiu</button></div>
@@ -1946,45 +1976,6 @@ $('#addTransferBtn').onclick=()=>modal('Registrar operació',[{label:'Jugador',n
 $('#addObjectiveBtn').onclick=()=>modal('Afegir objectiu',[{label:'Objectiu',name:'name',full:1},{label:'Detall',name:'detail',full:1},{label:'Progrés %',name:'progress',type:'number',min:0,max:100},{label:'Pes %',name:'weight',type:'number',min:0,max:100},{label:'Prioritat',name:'priority',type:'select',options:['Alta','Mitjana','Baixa']},{label:'Revisió',name:'review'}],d=>state.objectives.push({...d,progress:num(d.progress),weight:num(d.weight),status:'active'}));
 $('#addYouthBtn').onclick=()=>modal('Afegir jove',[{label:'Nom',name:'name',full:1},{label:'Edat',name:'age',type:'number'},{label:'Posició',name:'pos'},{label:'Origen',name:'origin'},{label:'OVR',name:'ovr',type:'number'},{label:'Minuts',name:'minutes',type:'number'},{label:'Aparicions',name:'appearances',type:'number'},{label:'Estat',name:'status',type:'select',options:['Cantera','Primer equip','Cedit']}],d=>{if(d.status==='Primer equip'&&state.youth.filter(y=>y.status==='Primer equip').length>=2){alert('⛔ PROMOCIÓ BLOQUEJADA\n\nLa normativa permet un màxim de 2 promocions significatives de cantera per temporada.');return false;}state.youth.push(d);return true;});
 $('#addSeasonBtn').onclick=()=>{const r=realism();modal('Tancar temporada',[{label:'Temporada',name:'season',full:1},{label:'Posició final',name:'position'},{label:'Resum',name:'summary',full:1}],d=>{const pos=num(d.position);const franchiseUsed=state.transfers.some(t=>['Compra','Agent lliure','Cessió entrada'].includes(t.type)&&t.franchise==='Sí');state.history.unshift({...d,score:r.score,net:r.net,franchiseUsed,clubStatus:state.clubStatus});if(pos){let next=state.clubStatus;if(pos<=7)next=Math.max(next,5.4);else if(pos<=10)next=Math.max(next,5.2);else if(pos<=13)next=Math.max(next,5.0);else if(pos<=17)next=Math.max(4.5,Math.min(next,4.8));else next=Math.max(4.2,next-.2);state.clubStatus=Number(next.toFixed(1));}})};
-window.saveInitialBudget=async()=>{
-  const input=$('#finInitialBudget'),status=$('#financeSaveStatus'),btn=$('#saveInitialBudgetBtn');
-  const value=Number(String(input?.value||'').replace(',','.'));
-  if(!Number.isFinite(value)||value<=0){
-    if(status){status.className='sync-banner warn';status.textContent='Introdueix un pressupost inicial superior a 0.';}
-    return;
-  }
-  if(btn){btn.disabled=true;btn.textContent='Guardant…';}
-  if(status){status.className='sync-banner';status.textContent='Guardant pressupost…';}
-  try{
-    const r=await fetch('/api/finance/budget',{
-      method:'POST',
-      headers:{'content-type':'application/json'},
-      body:JSON.stringify({initialBudget:value})
-    });
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.error||'No s’ha pogut guardar.');
-    state.finance=state.finance||{};
-    state.finance.initialBudget=value;
-    state._clientUpdatedAt=Date.now();
-    localStorage.setItem(KEY,JSON.stringify(state));
-    const fm=financialModel();
-    if($('#finOperationalOpening'))$('#finOperationalOpening').value=money(fm.openingOperational);
-    if($('#finBudget'))$('#finBudget').value=money(fm.available);
-    if($('#finInitialWages'))$('#finInitialWages').value=wageKDisplay(fm.initialWages)+' k€/set.';
-    if($('#finWages'))$('#finWages').value=wageKDisplay(fm.currentWages)+' k€/set.';
-    if($('#finWageGrowth'))$('#finWageGrowth').value=(fm.wageGrowth>=0?'+':'')+(fm.wageGrowth*100).toFixed(1)+'%';
-    try{render();}catch(e){console.error('render after budget save',e)}
-    if(status){
-      status.className='sync-banner ok';
-      status.textContent='Pressupost guardat al servidor · '+money(fm.openingOperational)+' operatius · '+money(fm.available)+' disponibles ara';
-    }
-  }catch(e){
-    if(status){status.className='sync-banner warn';status.textContent='Error guardant pressupost: '+e.message;}
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent='Guardar i recalcular';}
-  }
-};
-$('#finInitialBudget').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();saveInitialBudget();}};
 
 $('#editNextMatchBtn').onclick=()=>modal('Proper partit',[{label:'Rival',name:'opponent',full:1},{label:'Competició',name:'competition'},{label:'Data / jornada',name:'date'},{label:'Localització',name:'venue',type:'select',options:['Casa','Fora']}],d=>state.nextMatch=d);
 $('#editStandingsBtn').onclick=()=>modal('Actualitzar classificació',[{label:'Enganxa files: posició | club | PJ | punts | diferència gols',name:'rows',type:'textarea',full:1,placeholder:'1 | Club | 10 | 24 | +12'}],d=>{state.standings=d.rows.split(/\n+/).map(line=>line.split('|').map(x=>x.trim())).filter(x=>x.length>=4).map(x=>({pos:num(x[0]),club:x[1],pj:num(x[2]),pts:num(x[3]),dg:num(x[4])})).filter(x=>x.pos&&x.club)});
