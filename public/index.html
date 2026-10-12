@@ -548,57 +548,77 @@ function mergeIncomingState(remote){
   localStorage.setItem(KEY,JSON.stringify(state));
 }
 
-async function cloudLoad(attempt=0){
+async function fetchWithTimeout(url,options={},ms=6000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),ms);
+  try{return await fetch(url,{...options,signal:controller.signal});}
+  finally{clearTimeout(timer);}
+}
+function mergeSquadsSafe(localList,remoteList){
+  const map=new Map();
+  // Remote first, local second so current-device edits win for the same player.
+  for(const p of (remoteList||[])){const k=squadKey(p);if(k)map.set(k,p);}
+  for(const p of (localList||[])){const k=squadKey(p);if(k)map.set(k,p);}
+  return [...map.values()];
+}
+async function cloudLoad(){
   const banner=$('#squadHydrationStatus');
   try{
     if(banner){banner.textContent='Carregant plantilla guardada…';banner.className='sync-banner';}
-    const r=await fetch('/api/state',{cache:'no-store'});
+    const r=await fetchWithTimeout('/api/state',{cache:'no-store'},6000);
     if(!r.ok) throw new Error('cloud unavailable '+r.status);
     const data=await r.json();
     cloudSyncEnabled=true;
     const pill=document.querySelector('.status-pill');
     if(pill) pill.innerHTML='<span class="dot"></span>Sincronitzat';
+
     if(data.state){
       const localState=state;
       const remoteState=data.state;
       const ls=stateStamp(localState),rs=stateStamp(remoteState);
-      if(ls&&rs){
-        if(ls>rs){
-          backupStateSnapshot(remoteState,'cloud-older');
-          await cloudPush();
-        }else{
-          if(stateMeaningful(localState))backupStateSnapshot(localState,'before-cloud-load');
-          mergeIncomingState(remoteState);
-        }
-      }else{
-        const localCount=(localState.squad||[]).length,remoteCount=(remoteState.squad||[]).length;
-        if(localCount>remoteCount){
-          const merged={...remoteState,...localState,squad:mergeLegacySquads(localState,remoteState),_clientUpdatedAt:Date.now()};
-          backupStateSnapshot(remoteState,'legacy-cloud-before-merge');
-          mergeIncomingState(merged);
-          await cloudPush();
-        }else{
-          if(stateMeaningful(localState))backupStateSnapshot(localState,'legacy-local-before-cloud');
-          mergeIncomingState(remoteState);
-        }
+      const newerBase=ls>=rs?localState:remoteState;
+      const mergedSquad=mergeSquadsSafe(localState.squad||[],remoteState.squad||[]);
+      const merged={...structuredClone(base),...newerBase,squad:mergedSquad,_clientUpdatedAt:Math.max(ls,rs,Date.now())};
+      backupStateSnapshot(localState,'before-cloud-merge');
+      mergeIncomingState(merged);
+
+      // Paint immediately. Never wait for a POST before showing the squad.
+      renderSquadTablesOnly();
+      try{renderPerformance();}catch(e){}
+      const activeN=mergedSquad.filter(p=>p.ownership!=='Cedit fora').length;
+      const loanN=mergedSquad.filter(p=>p.ownership==='Cedit fora').length;
+      if(banner){
+        banner.textContent='Plantilla carregada · '+activeN+' actius · '+loanN+' cedits fora';
+        banner.className='sync-banner ok';
+        setTimeout(()=>banner.classList.add('hidden'),1200);
       }
+
+      // Persist the safe merged copy in the background, without blocking the UI.
+      localStorage.setItem(KEY,JSON.stringify(state));
+      setTimeout(()=>cloudPush(),0);
     }else{
       state._clientUpdatedAt=state._clientUpdatedAt||Date.now();
       localStorage.setItem(KEY,JSON.stringify(state));
-      await cloudPush();
+      renderSquadTablesOnly();
+      if(banner){
+        banner.textContent='Plantilla local carregada';
+        banner.className='sync-banner ok';
+        setTimeout(()=>banner.classList.add('hidden'),1200);
+      }
+      setTimeout(()=>cloudPush(),0);
     }
-    try{render();}catch(e){console.error('render after cloud load',e);}renderSquadTablesOnly();setTimeout(renderSquadTablesOnly,50);
-    if(banner){banner.textContent='Plantilla carregada';banner.className='sync-banner ok';setTimeout(()=>banner.classList.add('hidden'),700);}
     return true;
   }catch(e){
     cloudSyncEnabled=false;
-    if(attempt<4){
-      if(banner){banner.textContent='Sincronitzant dades…';banner.className='sync-banner warn';}
-      await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
-      return cloudLoad(attempt+1);
+    renderSquadTablesOnly();
+    try{renderPerformance();}catch(err){}
+    const localN=(state.squad||[]).length;
+    if(banner){
+      banner.textContent=localN
+        ? 'Mostrant còpia local · '+localN+' jugadors'
+        : 'No s’ha pogut carregar la còpia del núvol';
+      banner.className='sync-banner warn';
     }
-    try{render();}catch(err){}
-    if(banner){banner.textContent='No s’ha pogut sincronitzar ara mateix. Mostrant la còpia local.';banner.className='sync-banner warn';}
     return false;
   }
 }
@@ -606,11 +626,11 @@ async function cloudLoad(attempt=0){
 async function cloudPush(){
   if(!cloudSyncEnabled) return;
   try{
-    const r=await fetch('/api/state',{
+    const r=await fetchWithTimeout('/api/state',{
       method:'POST',
       headers:{'content-type':'application/json'},
       body:JSON.stringify({state})
-    });
+    },6000);
     if(!r.ok)throw new Error('cloud save failed');
   }catch(e){}
 }
@@ -619,6 +639,7 @@ function save(){
   backupStateSnapshot(state,'before-save');
   state._clientUpdatedAt=Date.now();
   localStorage.setItem(KEY,JSON.stringify(state));
+  renderSquadTablesOnly();
   render();
   scheduleCloudPush();
 }
