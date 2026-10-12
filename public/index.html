@@ -2397,10 +2397,28 @@ setTimeout(()=>cloudLoad(),50);
     }catch(e){console.error('visible squad fallback',e)}
   }
   window.addEventListener('load',()=>{renderVisibleSquad();setTimeout(renderVisibleSquad,1000);});
+
+  // Capture sortable-header clicks before the legacy app can replace/override handlers.
   document.addEventListener('click',e=>{
+    const squadTh=e.target.closest&&e.target.closest('[data-squad-sort]');
+    if(squadTh){
+      e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+      const key=squadTh.dataset.squadSort;
+      if(activeSort.key===key)activeSort.dir*=-1;else activeSort={key,dir:1};
+      renderVisibleSquad();
+      return;
+    }
+    const loanTh=e.target.closest&&e.target.closest('[data-loan-sort]');
+    if(loanTh){
+      e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+      const key=loanTh.dataset.loanSort;
+      if(loanSort.key===key)loanSort.dir*=-1;else loanSort={key,dir:1};
+      renderVisibleSquad();
+      return;
+    }
     const el=e.target.closest&&e.target.closest('[data-view="squad"]');
     if(el)setTimeout(renderVisibleSquad,80);
-  });
+  },true);
 })();
 </script>
 </body>
