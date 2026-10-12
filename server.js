@@ -785,6 +785,14 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname === '/api/transfers/history' && req.method === 'GET') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?current.rows[0].data:{};
+      const transfers=Array.isArray(stateData.transfers)?stateData.transfers:[];
+      return json(res,200,{transfers},'no-store');
+    }
+
     if (u.pathname === '/api/transfers/loan-in' && req.method === 'POST') {
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const body=await readBody(req);
