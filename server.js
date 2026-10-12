@@ -661,12 +661,15 @@ const server = http.createServer(async (req, res) => {
     if (u.pathname === '/api/finance/budget' && req.method === 'POST') {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const body=await readBody(req);
-      const initialBudget=Number(String(body?.initialBudget ?? '').replace(',','.'));
+      const rawBudget=Number(String(body?.initialBudget ?? '').replace(',','.'));
+      const initialBudget=rawBudget>100000?rawBudget/1000000:rawBudget;
       if(!Number.isFinite(initialBudget) || initialBudget<=0) return json(res,400,{error:'Pressupost inicial no vàlid.'});
 
       const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
       const stateData=current.rows[0]?.data&&typeof current.rows[0].data==='object'?{...current.rows[0].data}:{};
-      stateData.finance={...(stateData.finance||{}),initialBudget};
+      const updatedAt=Date.now();
+      stateData.finance={...(stateData.finance||{}),initialBudget,budgetSource:'EA available transfer budget'};
+      stateData._clientUpdatedAt=updatedAt;
 
       await pool.query('BEGIN');
       try{
@@ -685,7 +688,7 @@ const server = http.createServer(async (req, res) => {
         await pool.query('ROLLBACK');
         throw e;
       }
-      return json(res,200,{ok:true,initialBudget,openingOperational:initialBudget});
+      return json(res,200,{ok:true,initialBudget,openingOperational:initialBudget,updatedAt});
     }
 
     if (u.pathname === '/api/state' && req.method === 'GET') {
