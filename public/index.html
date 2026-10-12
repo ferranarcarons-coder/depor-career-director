@@ -2286,5 +2286,86 @@ setTimeout(()=>cloudLoad(),50);
   }
 })();
 </script>
+<script>
+(function(){
+  const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const n=v=>Number(v||0);
+  const wage=v=>{const x=n(v)/1000;return Number.isInteger(x)?String(x):x.toFixed(1)};
+  const value=v=>{const x=n(v);return x?String(Number(x.toFixed(3))):'0'};
+  const ovr=p=>n(p.currentOvr||p.ovr||p.baseOvr)||'—';
+  const base=p=>n(p.baseOvr||p.ovr||p.currentOvr)||'—';
+  const share=p=>{
+    if((p.ownership||'Propietat')==='Propietat')return 100;
+    if(p.wageShareManual===true)return Math.max(0,Math.min(100,n(p.wageShareDepor)));
+    const name=String(p.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(p.ownership==='Cedit al Dépor' && /jose.*gimenez|josema.*gimenez/.test(name))return 30;
+    if(p.ownership==='Cedit al Dépor' && /marc casado/.test(name))return 50;
+    if(p.ownership==='Cedit al Dépor' && /angelino|jose angel esmoris/.test(name))return 60;
+    if(p.ownership==='Cedit fora' && /charlie patino/.test(name))return 25;
+    const stored=n(p.wageShareDepor); if(stored>0)return stored;
+    return p.ownership==='Cedit al Dépor'?100:0;
+  };
+  async function renderVisibleSquad(){
+    const activeBody=document.getElementById('squadTable');
+    const loanBody=document.getElementById('loanedOutTable');
+    if(!activeBody||!loanBody)return;
+    try{
+      const r=await fetch('/api/squad?ts='+Date.now(),{cache:'no-store'});
+      if(!r.ok)return;
+      const out=await r.json();
+      const squad=Array.isArray(out.squad)?out.squad:[];
+      const active=squad.filter(p=>p.ownership!=='Cedit fora').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ca'));
+      const loans=squad.filter(p=>p.ownership==='Cedit fora').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ca'));
+      activeBody.innerHTML=active.map((p,i)=>{
+        const delta=n(p.currentOvr||p.ovr||p.baseOvr)-n(p.baseOvr||p.ovr||p.currentOvr);
+        const duration=p.ownership==='Cedit al Dépor'
+          ? (n(p.loanYears)?n(p.loanYears)+' any'+(n(p.loanYears)===1?'':'s'):'Pendent')
+          : (n(p.contractYears)?n(p.contractYears)+' any'+(n(p.contractYears)===1?'':'s'):'Pendent');
+        const link=p.ownership==='Cedit al Dépor'
+          ? 'CESSIÓ ENTRANT'+(p.parentClub?' · '+esc(p.parentClub):'')
+          : 'PROPI';
+        return '<tr>'+
+          '<td><strong>'+esc(p.name||'')+'</strong></td>'+
+          '<td>'+esc(p.pos||'—')+'</td>'+
+          '<td>'+esc(p.age||'—')+'</td>'+
+          '<td>'+esc(p.role||'—')+'</td>'+
+          '<td>'+link+'</td>'+
+          '<td>'+duration+'</td>'+
+          '<td>'+base(p)+'</td>'+
+          '<td><strong>'+ovr(p)+'</strong></td>'+
+          '<td>'+(delta>0?'+':'')+delta+'</td>'+
+          '<td>'+esc(p.ovrUpdatedAt||'—')+'</td>'+
+          '<td>'+value(p.value)+'</td>'+
+          '<td>'+wage(p.wage)+'</td>'+
+          '<td>'+share(p)+'%</td>'+
+          '<td>'+(p.ownership==='Cedit al Dépor'?'—':duration)+'</td>'+
+          '<td></td>'+
+        '</tr>';
+      }).join('');
+      loanBody.innerHTML=loans.length?loans.map(p=>'<tr>'+
+        '<td><strong>'+esc(p.name||'')+'</strong></td>'+
+        '<td>'+esc(p.pos||'—')+'</td>'+
+        '<td>'+esc(p.age||'—')+'</td>'+
+        '<td>'+esc(p.destinationClub||'—')+'</td>'+
+        '<td>'+(n(p.loanYears)?n(p.loanYears)+' any'+(n(p.loanYears)===1?'':'s'):'—')+'</td>'+
+        '<td>'+ovr(p)+'</td>'+
+        '<td>'+value(p.value)+'</td>'+
+        '<td>'+wage(p.wage)+'</td>'+
+        '<td>'+share(p)+'%</td>'+
+        '<td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?value(p.purchaseOptionValue)+' M€':'—')+'</td>'+
+        '<td></td>'+
+      '</tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Dépor cedits fora.</td></tr>';
+      const count=document.getElementById('loanedOutCount');if(count)count.textContent=loans.length+' JUGADOR'+(loans.length===1?'':'S');
+      const banner=document.getElementById('squadHydrationStatus');
+      if(banner){banner.textContent='Plantilla carregada · '+active.length+' actius · '+loans.length+' cedits fora';banner.className='sync-banner ok';}
+    }catch(e){console.error('visible squad fallback',e)}
+  }
+  window.addEventListener('load',()=>{renderVisibleSquad();setTimeout(renderVisibleSquad,1000);});
+  document.addEventListener('click',e=>{
+    const el=e.target.closest&&e.target.closest('[data-view="squad"]');
+    if(el)setTimeout(renderVisibleSquad,80);
+  });
+})();
+</script>
 </body>
 </html>
