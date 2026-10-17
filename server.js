@@ -885,8 +885,17 @@ async function serveIndex(res) {
     const rawCurrentWages = dedicatedSquad.reduce((sum,p)=>sum+wageContribution(p),0);
     const initialMap = finance.initialWageByPlayer && typeof finance.initialWageByPlayer === 'object'
       ? finance.initialWageByPlayer : {};
-    let initialWages = Number(finance.initialWeeklyWages||0) || Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0) || 4800000;
-    let currentWages = rawCurrentWages > 0 ? rawCurrentWages : initialWages;
+    const mappedInitialWages = Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0);
+    let initialWages = Number(finance.initialWeeklyWages||0) || mappedInitialWages || 4800000;
+    const hasUsableInitialPlayerWagesSSR = mappedInitialWages > initialWages*.5;
+    const knownPostStartDeltaSSR = dedicatedSquad.reduce((sum,p)=>{
+      const now=wageContribution(p);
+      if(!(p.playerId in initialMap))return sum+now;
+      const before=Number(initialMap[p.playerId]||0);
+      if(before>0)return sum+(now-before);
+      return sum;
+    },0);
+    let currentWages = hasUsableInitialPlayerWagesSSR ? rawCurrentWages : initialWages + knownPostStartDeltaSSR;
 
     if (!Number(finance.initialWeeklyWages||0) && !Object.values(initialMap).some(v=>Number(v||0)>0) && dedicatedSquad.length >= 18) {
       const snap = {};
@@ -1256,9 +1265,19 @@ const server = http.createServer(async (req, res) => {
         if(!wage)return 0;
         return wage*(effectiveLoanShare(p)/100);
       };
-      const currentWages=squad.reduce((a,p)=>a+wageContribution(p),0);
+      const rawCurrentWages=squad.reduce((a,p)=>a+wageContribution(p),0);
       const baseline=finance.initialWageByPlayer&&typeof finance.initialWageByPlayer==='object'?finance.initialWageByPlayer:{};
-      const initialWages=Object.values(baseline).reduce((a,v)=>a+Number(v||0),0);
+      const mappedInitial=Object.values(baseline).reduce((a,v)=>a+Number(v||0),0);
+      const initialWages=Number(finance.initialWeeklyWages||0)||mappedInitial||4800000;
+      const hasUsableInitialPlayerWages=mappedInitial>initialWages*.5;
+      const knownPostStartDelta=squad.reduce((sum,p)=>{
+        const now=wageContribution(p);
+        if(!(p.playerId in baseline)) return sum+now;
+        const before=Number(baseline[p.playerId]||0);
+        if(before>0) return sum+(now-before);
+        return sum;
+      },0);
+      const currentWages=hasUsableInitialPlayerWages?rawCurrentWages:initialWages+knownPostStartDelta;
       const transfers=Array.isArray(stateData.transfers)?stateData.transfers:[];
       const expenseTypes=new Set(['Compra','Cessió entrada','Agent lliure']);
       const incomeTypes=new Set(['Venda','Cessió sortida']);
@@ -1267,9 +1286,11 @@ const server = http.createServer(async (req, res) => {
       const initialBudget=CLUB_CONFIG.initialBudget;
       const available=initialBudget+(transferIncome*.70)-transferSpend;
       const wageGrowth=initialWages?(currentWages-initialWages)/initialWages:0;
-      const ownedWages=squad.filter(p=>(p.ownership||'Propietat')==='Propietat').reduce((a,p)=>a+wageContribution(p),0);
-      const incomingLoanWages=squad.filter(p=>p.ownership==='Cedit al Barça').reduce((a,p)=>a+wageContribution(p),0);
-      const outgoingLoanWages=squad.filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+wageContribution(p),0);
+      const ownedWages=hasUsableInitialPlayerWages
+        ?squad.filter(p=>(p.ownership||'Propietat')==='Propietat').reduce((a,p)=>a+wageContribution(p),0)
+        :currentWages;
+      const incomingLoanWages=hasUsableInitialPlayerWages?squad.filter(p=>p.ownership==='Cedit al Barça').reduce((a,p)=>a+wageContribution(p),0):0;
+      const outgoingLoanWages=hasUsableInitialPlayerWages?squad.filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+wageContribution(p),0):0;
       const loanShares=squad.filter(p=>['Cedit al Barça','Cedit fora'].includes(p.ownership)).map(p=>({name:p.name,ownership:p.ownership,share:effectiveLoanShare(p),wage:Number(p.wage||0),cost:wageContribution(p)}));
       return json(res,200,{initialBudget,available,transferSpend,transferIncome,reinvestableIncome:transferIncome*.70,initialWages,currentWages,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,squadCount:squad.length,loanShares},'no-store');
     }
@@ -1329,6 +1350,14 @@ const server = http.createServer(async (req, res) => {
       const currentStateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
       const currentState=currentStateRow.rows[0]?.data&&typeof currentStateRow.rows[0].data==='object'
         ? currentStateRow.rows[0].data : {};
+      stateToSave.finance={
+        ...(stateToSave.finance||{}),
+        initialBudget:CLUB_CONFIG.initialBudget,
+        initialWeeklyWages:Number(currentState.finance?.initialWeeklyWages||4800000),
+        wageBaselineSource:currentState.finance?.wageBaselineSource||'FAFIFA · FC Barcelona FC27 · 7 Oct 2026',
+        initialWageByPlayer:currentState.finance?.initialWageByPlayer||stateToSave.finance?.initialWageByPlayer||{},
+        baselineLocked:true
+      };
       const serverTransfers=Array.isArray(currentState.transfers)?currentState.transfers:[];
       const incomingTransfers=Array.isArray(stateToSave.transfers)?stateToSave.transfers:[];
       const transferKey=(t)=>{
