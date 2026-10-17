@@ -1283,7 +1283,7 @@ const server = http.createServer(async (req, res) => {
       const history=Array.isArray(body?.history)?body.history.slice(-12):[];
       if(!message)return json(res,400,{error:'Falta el missatge.'});
 
-      if(!process.env.OPENAI_API_KEY){
+      if(!process.env.GROQ_API_KEY){
         return json(res,503,{error:'Director AI conversacional no configurat.',code:'AI_NOT_CONFIGURED'});
       }
 
@@ -1293,17 +1293,17 @@ const server = http.createServer(async (req, res) => {
         {role:'user',content:message}
       ];
 
-      const rr=await fetch('https://api.openai.com/v1/responses',{
+      const rr=await fetch('https://api.groq.com/openai/v1/chat/completions',{
         method:'POST',
         headers:{
-          'authorization':'Bearer '+process.env.OPENAI_API_KEY,
+          'authorization':'Bearer '+process.env.GROQ_API_KEY,
           'content-type':'application/json'
         },
         body:JSON.stringify({
-          model:process.env.DIRECTOR_AI_MODEL||'gpt-6-luna',
-          instructions:directorPrompt(context),
-          input,
-          max_output_tokens:500
+          model:process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b',
+          messages:[{role:'system',content:directorPrompt(context)},...input],
+          temperature:0.65,
+          max_completion_tokens:700
         })
       });
 
@@ -1312,17 +1312,8 @@ const server = http.createServer(async (req, res) => {
         console.error('[DIRECTOR_AI_ERROR]',JSON.stringify(data));
         return json(res,502,{error:'El Director AI no ha pogut respondre.'});
       }
-      let answer='';
-      if(typeof data.output_text==='string')answer=data.output_text.trim();
-      if(!answer&&Array.isArray(data.output)){
-        for(const item of data.output){
-          for(const part of (item?.content||[])){
-            if(part?.type==='output_text'&&part?.text)answer+=part.text;
-          }
-        }
-      }
-      if(!answer)answer='No he pogut construir una resposta útil.';
-      return json(res,200,{answer,model:data.model||process.env.DIRECTOR_AI_MODEL||'gpt-6-luna'},'no-store');
+      const answer=String(data?.choices?.[0]?.message?.content||'').trim()||'No he pogut construir una resposta útil.';
+      return json(res,200,{answer,model:data.model||process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b'},'no-store');
     }
 
     if (u.pathname === '/api/finance/snapshot' && req.method === 'GET') {
