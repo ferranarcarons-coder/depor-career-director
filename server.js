@@ -13,6 +13,17 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const BASE = 'https://fctoolshub.com';
 const FC27_DATASET_URL = 'https://raw.githubusercontent.com/LakshmiKanth11/EA_FC_ANALYSIS/main/EA_FC_PLAYERS_DATASET_AND_%20DASHBOARD/data/players_search.json';
 const FC27_SNAPSHOT_DATE = '2026-09-12';
+const CLUB_CONFIG = {
+  id:'barcelona',
+  name:'FC Barcelona',
+  shortName:'Barça',
+  datasetClub:'FC Barcelona',
+  initialBudget:150.4,
+  budgetSource:'FC 27 update 4 · 7 Oct 2026',
+  clubStatus:9.2,
+  target:'Guanyar LaLiga',
+  projectStage:'Fase 1 · Competir per tots els títols'
+};
 const FC27_CSV_URL = 'https://raw.githubusercontent.com/LakshmiKanth11/EA_FC_ANALYSIS/main/EA_FC_PLAYERS_DATASET_AND_%20DASHBOARD/data/players.csv';
 let fc27Players = null;
 let fc27FullById = null;
@@ -78,7 +89,7 @@ async function initDb() {
     const finance = {...(data.finance || {})};
     if (finance.budgetBaselineSeason !== '2026/27') {
       finance.initialBudget = 11.304769;
-      finance.budgetSource = 'EA available transfer budget';
+      finance.budgetSource = CLUB_CONFIG.budgetSource;
       finance.budgetBaselineSeason = '2026/27';
       data.finance = finance;
       await pool.query(
@@ -106,6 +117,120 @@ async function initDb() {
   } catch (e) {
     console.log('[FINANCE_DIAG_ERROR]', e.message);
   }
+  // One-time club switch: archive the Dépor career and start a clean Barça 2026/27 save.
+  try {
+    const currentClub = await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+    const existing = currentClub.rows[0]?.data || {};
+    if (existing.clubId !== CLUB_CONFIG.id) {
+      if (currentClub.rowCount) {
+        await pool.query(
+          'INSERT INTO career_state_history(state_id,data,saved_at) VALUES($1,$2::jsonb,NOW())',
+          ['main', JSON.stringify(existing)]
+        );
+      }
+      const cleanState = {
+        clubId: CLUB_CONFIG.id,
+        clubName: CLUB_CONFIG.name,
+        season:'2026/27',
+        position:'—',
+        target:CLUB_CONFIG.target,
+        clubStatus:CLUB_CONFIG.clubStatus,
+        projectStage:CLUB_CONFIG.projectStage,
+        tactic:'4-3-3',
+        lineup:{starters:{},bench:[]},
+        points:0,
+        matches:[],
+        nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},
+        standings:[],
+        decisions:[],
+        reviews:[],
+        setup:{squad:true,finances:true,board:false,hierarchy:false,needs:false,rules:true},
+        shortlist:[],
+        latestAssessment:null,
+        finance:{
+          initialBudget:CLUB_CONFIG.initialBudget,
+          initialWageByPlayer:{},
+          baselineLocked:false,
+          budgetSource:CLUB_CONFIG.budgetSource,
+          budgetBaselineSeason:'2026/27'
+        },
+        transfers:[],
+        youth:[],
+        history:[],
+        directorChat:[],
+        _clientUpdatedAt:Date.now()
+      };
+      await pool.query('BEGIN');
+      try {
+        await pool.query(
+          `INSERT INTO career_state(id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          ['main',JSON.stringify(cleanState)]
+        );
+        await pool.query('DELETE FROM squad_players');
+        await pool.query('COMMIT');
+      } catch (e) {
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+
+      // Bootstrap the current Barça squad from the FC27 dataset.
+      try {
+        const players = await ensureFc27Dataset();
+        const fullMap = await ensureFc27FullDataset();
+        const barca = players.filter(p => p.gender !== 'Women' && String(p.club||'').toLowerCase() === CLUB_CONFIG.datasetClub.toLowerCase());
+        for (const raw of barca) {
+          const full = fullMap.get(String(raw.id)) || {};
+          const ovr = Number(raw.ovr||0) || 0;
+          const player = {
+            playerId:'fc27-'+String(raw.id),
+            fc27Id:String(raw.id),
+            fc27Matched:true,
+            name:raw.name||'Jugador',
+            pos:raw.pos||'',
+            age:ageFromBirthdate(full.birthdate),
+            role:ovr>=84?'Clave':ovr>=80?'Importante':ovr>=76?'Rotación':'Promesa',
+            ownership:'Propietat',
+            parentClub:'',
+            destinationClub:'',
+            wage:0,
+            wageShareDepor:100,
+            wageShareManual:false,
+            contractYears:0,
+            loanYears:0,
+            purchaseOptionType:'Sense opció',
+            purchaseOptionValue:0,
+            baseOvr:ovr,
+            currentOvr:ovr,
+            value:0,
+            minutes:0,
+            goals:0,
+            assists:0,
+            nationality:raw.nat||'',
+            realClub:raw.club||CLUB_CONFIG.name,
+            realLeague:raw.league||'',
+            preferredFoot:raw.foot||'',
+            alternatePositions:full.alternate_positions||'',
+            birthdate:full.birthdate||'',
+            ovrUpdatedAt:''
+          };
+          await pool.query(
+            `INSERT INTO squad_players(player_id,data,updated_at)
+             VALUES($1,$2::jsonb,NOW())
+             ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+            [player.playerId,JSON.stringify(player)]
+          );
+        }
+        console.log('[CLUB_SWITCH] Barça career initialized with', barca.length, 'FC27 players');
+      } catch (e) {
+        console.warn('[CLUB_SWITCH] Barça squad bootstrap failed:', e.message);
+      }
+    }
+  } catch (e) {
+    console.warn('[CLUB_SWITCH] Migration skipped:', e.message);
+  }
+
   dbReady = true;
   return true;
 }
@@ -438,7 +563,7 @@ function inferOriginLevelServer(club, league, ovr) {
   return Number(v.toFixed(1));
 }
 
-function scoutingRealismScore(p, full, clubStatus=4.6) {
+function scoutingRealismScore(p, full, clubStatus=CLUB_CONFIG.clubStatus) {
   const ovr=Number(p.ovr||0);
   const age=ageFromBirthdate(full?.birthdate);
   const level=overallToClubLevelServer(ovr);
@@ -479,7 +604,7 @@ function scoutingRealismScore(p, full, clubStatus=4.6) {
   return {score,reasons:reasons.slice(0,3),age,level,origin,market};
 }
 
-async function recommendFc27Players(position, clubStatus=4.6, limit=12) {
+async function recommendFc27Players(position, clubStatus=CLUB_CONFIG.clubStatus, limit=12) {
   const players=await ensureFc27Dataset();
   const fullMap=await ensureFc27FullDataset();
   const target=String(position||'').toUpperCase();
@@ -577,11 +702,11 @@ function serverPlayerRow(p,i){
   const delta=cur&&base?cur-base:0;
   const value=n(p.value);
   const wage=n(p.wage)/1000;
-  const duration=own==='Cedit al Dépor'
+  const duration=own==='Cedit al Barça'
     ? (n(p.loanYears)?n(p.loanYears)+' anys':'Pendent')
     : (n(p.contractYears)?n(p.contractYears)+' anys':'Pendent');
-  const link=own==='Cedit al Dépor'?'CESSIÓ ENTRANT':'PROPI';
-  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.role||'—')+'</td><td>'+escHtml(link)+'</td><td>'+escHtml(duration)+'</td><td>'+(base||'—')+'</td><td><strong>'+(cur||'—')+'</strong></td><td>'+(delta>0?'+':'')+delta+'</td><td>'+escHtml(p.ovrUpdatedAt||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+(own==='Cedit al Dépor'?'—':escHtml(duration))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button></td></tr>';
+  const link=own==='Cedit al Barça'?'CESSIÓ ENTRANT':'PROPI';
+  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.role||'—')+'</td><td>'+escHtml(link)+'</td><td>'+escHtml(duration)+'</td><td>'+(base||'—')+'</td><td><strong>'+(cur||'—')+'</strong></td><td>'+(delta>0?'+':'')+delta+'</td><td>'+escHtml(p.ovrUpdatedAt||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+(own==='Cedit al Barça'?'—':escHtml(duration))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button></td></tr>';
 }
 function serverLoanRow(p,i){
   const cur=n(p.currentOvr||p.ovr||p.baseOvr);
@@ -610,17 +735,17 @@ async function serveIndex(res) {
     // Authoritative finance snapshot rendered on the server so Dashboard/Finances
     // do not depend on the large client-side render chain.
     const finance = {...(initialState.finance || {})};
-    finance.initialBudget = 11.613983;
-    finance.budgetSource = 'EA available transfer budget after staff changes';
+    finance.initialBudget = CLUB_CONFIG.initialBudget;
+    finance.budgetSource = CLUB_CONFIG.budgetSource;
 
     const normLoanNameSSR=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
     const loanPresetSSR=(p)=>{
       const n=normLoanNameSSR(p?.name||'');
       const own=p?.ownership||'Propietat';
       const presets=[
-        {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Dépor',deporShare:30},
-        {keys:['marc casado'],ownership:'Cedit al Dépor',deporShare:50},
-        {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Dépor',deporShare:60},
+        {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Barça',deporShare:30},
+        {keys:['marc casado'],ownership:'Cedit al Barça',deporShare:50},
+        {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Barça',deporShare:60},
         {keys:['charlie patino'],ownership:'Cedit fora',deporShare:25}
       ];
       return presets.find(x=>x.ownership===own&&x.keys.includes(n))||null;
@@ -632,7 +757,7 @@ async function serveIndex(res) {
       const preset=loanPresetSSR(p); if(preset)return preset.deporShare;
       const stored=Number(p?.wageShareDepor||0);
       if(stored>0)return Math.max(0,Math.min(100,stored));
-      return own==='Cedit al Dépor'?100:0;
+      return own==='Cedit al Barça'?100:0;
     };
     const wageContribution = (p) => {
       const wage = Number(p?.wage || 0);
@@ -668,7 +793,7 @@ async function serveIndex(res) {
     const incomeTypes = new Set(['Venda','Cessió sortida']);
     const transferSpend = transfers.filter(t=>expenseTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
     const transferIncome = transfers.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
-    const availableBudget = 11.613983 + transferIncome * 0.70 - transferSpend;
+    const availableBudget = CLUB_CONFIG.initialBudget + transferIncome * 0.70 - transferSpend;
     const wageGrowth = initialWages ? (currentWages-initialWages)/initialWages : 0;
 
     const euroM = v => new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(Number(v||0)*1000000);
@@ -681,7 +806,7 @@ async function serveIndex(res) {
     html = html.replace('id="finInitialBudget" type="text" value="11.613.983 €" readonly',
       'id="finInitialBudget" type="text" value="11.613.983 €" readonly');
     html = html.replace('<input id="finOperationalOpening" type="text" readonly>',
-      '<input id="finOperationalOpening" type="text" value="'+euroM(11.613983)+'" readonly>');
+      '<input id="finOperationalOpening" type="text" value="'+euroM(CLUB_CONFIG.initialBudget)+'" readonly>');
     html = html.replace('<input id="finBudget" type="text" readonly>',
       '<input id="finBudget" type="text" value="'+euroM(availableBudget)+'" readonly>');
     html = html.replace('<input id="finInitialWages" type="text" readonly>',
@@ -694,7 +819,7 @@ async function serveIndex(res) {
     html = html.replace('<strong id="budgetKpi">€12.0M</strong>',
       '<strong id="budgetKpi">'+euroM(availableBudget)+'</strong>');
     html = html.replace('<small id="budgetDelta">Disponible</small>',
-      '<small id="budgetDelta">'+euroM(11.613983)+' pressupost inicial</small>');
+      '<small id="budgetDelta">'+euroM(CLUB_CONFIG.initialBudget)+' pressupost inicial</small>');
     html = html.replace('<strong id="wageGrowthKpi">—</strong>',
       '<strong id="wageGrowthKpi">'+wageK(currentWages)+' k€/set.</strong>');
     html = html.replace('<small id="wageGrowthLabel">vs inici</small>',
@@ -702,7 +827,7 @@ async function serveIndex(res) {
 
     html = html.replace('<div id="financeSummary"></div>',
       '<div id="financeSummary"><div class="summary-grid">'+
-      '<div class="summary-box"><small>Pressupost inicial EA</small><strong>'+euroM(11.613983)+'</strong></div>'+
+      '<div class="summary-box"><small>Pressupost inicial EA</small><strong>'+euroM(CLUB_CONFIG.initialBudget)+'</strong></div>'+
       '<div class="summary-box"><small>Despesa mercat</small><strong>'+euroM(transferSpend)+'</strong></div>'+
       '<div class="summary-box"><small>Ingressos mercat</small><strong>'+euroM(transferIncome)+'</strong></div>'+
       '<div class="summary-box"><small>Reinversió vendes (70%)</small><strong>'+euroM(transferIncome*.70)+'</strong></div>'+
@@ -717,7 +842,7 @@ async function serveIndex(res) {
     const activeRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership!=='Cedit fora').map(x=>serverPlayerRow(x.p,x.i)).join('');
     const loanRows=squad.map((p,i)=>({p,i})).filter(x=>x.p.ownership==='Cedit fora').map(x=>serverLoanRow(x.p,x.i)).join('');
     html=html.replace('<tbody id="squadTable"></tbody>','<tbody id="squadTable">'+activeRows+'</tbody>');
-    html=html.replace('<tbody id="loanedOutTable"></tbody>','<tbody id="loanedOutTable">'+(loanRows||'<tr><td colspan="11">No hi ha jugadors del Dépor cedits fora.</td></tr>')+'</tbody>');
+    html=html.replace('<tbody id="loanedOutTable"></tbody>','<tbody id="loanedOutTable">'+(loanRows||'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>')+'</tbody>');
     const activeCount=squad.filter(p=>p.ownership!=='Cedit fora').length;
     const loanCount=squad.filter(p=>p.ownership==='Cedit fora').length;
     html=html.replace('<div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div>',
@@ -818,7 +943,7 @@ const server = http.createServer(async (req, res) => {
       const squadPlayer={
         playerId,
         name:String(body.player).trim(),
-        ownership:'Cedit al Dépor',
+        ownership:'Cedit al Barça',
         parentClub:String(body.club).trim(),
         destinationClub:'',
         wage:Number(body.wage||0),
@@ -988,9 +1113,9 @@ const server = http.createServer(async (req, res) => {
         const n=normLoanName(p?.name||'');
         const own=p?.ownership||'Propietat';
         const presets=[
-          {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Dépor',deporShare:30},
-          {keys:['marc casado'],ownership:'Cedit al Dépor',deporShare:50},
-          {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Dépor',deporShare:60},
+          {keys:['jose maria gimenez','josema gimenez','jose gimenez'],ownership:'Cedit al Barça',deporShare:30},
+          {keys:['marc casado'],ownership:'Cedit al Barça',deporShare:50},
+          {keys:['angelino','jose angel esmoris tasende'],ownership:'Cedit al Barça',deporShare:60},
           {keys:['charlie patino','charlie patino'],ownership:'Cedit fora',deporShare:25}
         ];
         return presets.find(x=>x.ownership===own&&x.keys.includes(n))||null;
@@ -1005,7 +1130,7 @@ const server = http.createServer(async (req, res) => {
         if(preset)return preset.deporShare;
         const stored=Number(p?.wageShareDepor||0);
         if(stored>0)return Math.max(0,Math.min(100,stored));
-        return own==='Cedit al Dépor'?100:0;
+        return own==='Cedit al Barça'?100:0;
       };
       const wageContribution=(p)=>{
         const wage=Number(p?.wage||0);
@@ -1020,13 +1145,13 @@ const server = http.createServer(async (req, res) => {
       const incomeTypes=new Set(['Venda','Cessió sortida']);
       const transferSpend=transfers.filter(t=>expenseTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
       const transferIncome=transfers.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
-      const initialBudget=11.613983;
+      const initialBudget=CLUB_CONFIG.initialBudget;
       const available=initialBudget+(transferIncome*.70)-transferSpend;
       const wageGrowth=initialWages?(currentWages-initialWages)/initialWages:0;
       const ownedWages=squad.filter(p=>(p.ownership||'Propietat')==='Propietat').reduce((a,p)=>a+wageContribution(p),0);
-      const incomingLoanWages=squad.filter(p=>p.ownership==='Cedit al Dépor').reduce((a,p)=>a+wageContribution(p),0);
+      const incomingLoanWages=squad.filter(p=>p.ownership==='Cedit al Barça').reduce((a,p)=>a+wageContribution(p),0);
       const outgoingLoanWages=squad.filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+wageContribution(p),0);
-      const loanShares=squad.filter(p=>['Cedit al Dépor','Cedit fora'].includes(p.ownership)).map(p=>({name:p.name,ownership:p.ownership,share:effectiveLoanShare(p),wage:Number(p.wage||0),cost:wageContribution(p)}));
+      const loanShares=squad.filter(p=>['Cedit al Barça','Cedit fora'].includes(p.ownership)).map(p=>({name:p.name,ownership:p.ownership,share:effectiveLoanShare(p),wage:Number(p.wage||0),cost:wageContribution(p)}));
       return json(res,200,{initialBudget,available,transferSpend,transferIncome,reinvestableIncome:transferIncome*.70,initialWages,currentWages,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,squadCount:squad.length,loanShares},'no-store');
     }
 
@@ -1159,7 +1284,7 @@ const server = http.createServer(async (req, res) => {
 
     if (u.pathname === '/api/players/recommend') {
       const position=String(u.searchParams.get('position')||'').trim().toUpperCase();
-      const clubStatus=Number(u.searchParams.get('clubStatus')||4.6);
+      const clubStatus=Number(u.searchParams.get('clubStatus')||CLUB_CONFIG.clubStatus);
       const limit=Math.max(1,Math.min(20,Number(u.searchParams.get('limit')||12)));
       if(!position) return json(res,400,{error:'Falta la posició.'});
       const players=await recommendFc27Players(position,clubStatus,limit);
@@ -1209,6 +1334,6 @@ initDb()
   .catch(err => console.error('Postgres init failed:', err.message))
   .finally(() => {
     server.listen(PORT, '0.0.0.0', () => {
-      console.log('Dépor Career Director listening on ' + PORT);
+      console.log('Barça Career Director listening on ' + PORT);
     });
   });
