@@ -1879,7 +1879,7 @@ async function directorReply(text){
  if(intent==='sell')return squadSellCandidates('sell');
  return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Digues-me la decisió que vols prendre o el perfil que busques. Puc prioritzar fitxatges, vendes, cessions, renovacions, rols i necessitats de plantilla amb el context actual del Barça.'};
 }
-function directorHistoryForApi(){
+function directorHistoryForApi(currentText=''){
   const toText=(html)=>String(html||'')
     .replace(/<br\s*\/?>/gi,'\n')
     .replace(/<[^>]*>/g,' ')
@@ -1891,16 +1891,19 @@ function directorHistoryForApi(){
     .replace(/&quot;/gi,'"')
     .replace(/\s+/g,' ')
     .trim();
-  return (state.directorChat||[]).slice(-12).map(m=>({
+  const history=(state.directorChat||[]).slice(-12).map(m=>({
     role:m.role==='ai'?'assistant':'user',
     content:toText(m.html||'').replace(/^Director esportiu\s*/i,'').trim()
   })).filter(x=>x.content);
+  const last=history.at(-1);
+  if(last?.role==='user'&&last.content===String(currentText||'').trim())history.pop();
+  return history;
 }
 async function directorConversationalReply(text){
   const r=await fetch('/api/director/chat',{
     method:'POST',
     headers:{'content-type':'application/json'},
-    body:JSON.stringify({message:text,history:directorHistoryForApi()})
+    body:JSON.stringify({message:text,history:directorHistoryForApi(text)})
   });
   if(!r.ok){
     const err=await r.json().catch(()=>({}));
