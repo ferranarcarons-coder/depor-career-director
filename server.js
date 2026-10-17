@@ -88,7 +88,7 @@ async function initDb() {
     const data = financeState.rows[0].data || {};
     const finance = {...(data.finance || {})};
     if (finance.budgetBaselineSeason !== '2026/27') {
-      finance.initialBudget = 11.304769;
+      finance.initialBudget = CLUB_CONFIG.initialBudget;
       finance.budgetSource = CLUB_CONFIG.budgetSource;
       finance.budgetBaselineSeason = '2026/27';
       data.finance = finance;
@@ -229,6 +229,20 @@ async function initDb() {
     }
   } catch (e) {
     console.warn('[CLUB_SWITCH] Migration skipped:', e.message);
+  }
+
+  // One-time Barça wage/value baseline enrichment.
+  try{
+    const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+    const st=stateRow.rows[0]?.data||{};
+    const source=st.finance?.wageBaselineSource||'';
+    const squadRows=await pool.query('SELECT data FROM squad_players');
+    const nonZeroWages=squadRows.rows.filter(r=>Number(r.data?.wage||0)>0).length;
+    if(!source || nonZeroWages < Math.max(10,Math.floor(squadRows.rowCount*.6))){
+      await enrichBarcaSquadFinancials();
+    }
+  }catch(e){
+    console.warn('[BARCA_FINANCE_ENRICH_ERROR]',e.message);
   }
 
   dbReady = true;
@@ -685,6 +699,94 @@ async function searchPlayers(q) {
   return [];
 }
 
+async function enrichBarcaSquadFinancials(){
+  if(!pool) return {updated:0,failed:0,total:0};
+  const rows=await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at ASC');
+  const squad=rows.rows.map(r=>({playerId:r.player_id,data:r.data||{}}));
+  if(!squad.length) return {updated:0,failed:0,total:0};
+
+  let updated=0,failed=0;
+  const work=squad.filter(x=>!Number(x.data.wage||0) || !Number(x.data.value||0));
+
+  // Keep concurrency deliberately low: this is a one-time financial enrichment,
+  // not a scraper that should hammer the upstream source.
+  const queue=[...work];
+  const workers=Array.from({length:4},async()=>{
+    while(queue.length){
+      const item=queue.shift();
+      if(!item)break;
+      const p=item.data;
+      try{
+        const results=await searchPlayers(p.name||'');
+        let detail=null;
+        for(const ref of results.slice(0,3)){
+          try{
+            const html=await fetchHtml(ref.url);
+            const parsed=parseDetails(html,ref);
+            const n1=String(parsed.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+            const n2=String(p.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+            if(n1===n2 || n1.includes(n2) || n2.includes(n1)){
+              detail=parsed;break;
+            }
+          }catch(e){}
+        }
+        if(detail && (Number(detail.wage||0)>0 || Number(detail.value||0)>0)){
+          const next={...p};
+          if(Number(detail.wage||0)>0)next.wage=Number(detail.wage);
+          if(Number(detail.value||0)>0)next.value=Number(detail.value)/1e6;
+          next.financeSource='FC Tools Hub';
+          next.financeUpdatedAt=new Date().toISOString();
+          await pool.query(
+            'UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+            [item.playerId,JSON.stringify(next)]
+          );
+          updated++;
+        }else failed++;
+      }catch(e){
+        failed++;
+      }
+    }
+  });
+  await Promise.all(workers);
+
+  const fresh=await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at ASC');
+  const initialWageByPlayer={};
+  for(const row of fresh.rows){
+    const p=row.data||{};
+    const wage=Number(p.wage||0);
+    let share=100;
+    if(p.ownership==='Cedit fora')share=Math.max(0,Math.min(100,Number(p.wageShareDepor||0)));
+    else if(p.ownership==='Cedit al Barça')share=Math.max(0,Math.min(100,Number(p.wageShareDepor||100)));
+    initialWageByPlayer[row.player_id]=wage*(share/100);
+  }
+  const totalInitialWages=Object.values(initialWageByPlayer).reduce((a,v)=>a+Number(v||0),0);
+
+  if(totalInitialWages>0){
+    const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+    const stateData=stateRow.rows[0]?.data&&typeof stateRow.rows[0].data==='object'?{...stateRow.rows[0].data}:{};
+    stateData.finance={
+      ...(stateData.finance||{}),
+      initialBudget:CLUB_CONFIG.initialBudget,
+      budgetSource:CLUB_CONFIG.budgetSource,
+      budgetBaselineSeason:'2026/27',
+      initialWageByPlayer,
+      baselineLocked:true,
+      initialWageCapturedAt:new Date().toISOString(),
+      wageBaselineSource:'FC Tools Hub · FC27 player wages'
+    };
+    stateData._clientUpdatedAt=Date.now();
+    await pool.query(
+      `INSERT INTO career_state(id,data,updated_at)
+       VALUES($1,$2::jsonb,NOW())
+       ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+      ['main',JSON.stringify(stateData)]
+    );
+  }
+
+  console.log('[BARCA_FINANCE_ENRICH]',JSON.stringify({updated,failed,total:squad.length,totalInitialWages}));
+  return {updated,failed,total:squad.length,totalInitialWages};
+}
+
 async function readDedicatedSquad(){
   if(!dbReady) return [];
   const r=await pool.query('SELECT data FROM squad_players ORDER BY updated_at ASC, player_id ASC');
@@ -860,13 +962,13 @@ const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, 'http://localhost');
 
     if (u.pathname === '/version') {
-      return json(res,200,{build:'2026-10-12-1119',commit:'d589799d0f8d19b64dec5ae20d00b0e5a86c52eb'});
+      return json(res,200,{build:'2026-10-17-barca-finance',commit:'wage-baseline-v1'});
     }
 
     if (u.pathname === '/health') {
       return json(res, 200, {
         ok:true,
-        service:'depor-career-director',
+        service:'barca-career-director',
         database: dbReady ? 'connected' : (pool ? 'initializing' : 'not_configured'),
         fc27Dataset: fc27Players?.length || 0
       });
