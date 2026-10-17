@@ -539,10 +539,10 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 </dialog>
 
     <section id="finance" class="view">
-      <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Pressupost EA actual després dels canvis de staff: <strong>11.613.983 €</strong>. A partir d'aquí l'eina calcula mercat i massa salarial de jugadors.</p></div></div>
+      <div class="section-toolbar"><div><p class="eyebrow">FINANCIAL DISCIPLINE</p><h2>Finances</h2><p>Model financer de la carrera. El pressupost inicial, les compres, les vendes i la reinversió s’actualitzen automàticament.</p></div></div>
       <div class="form-grid panel">
-        <label>Pressupost inicial EA<input id="finInitialBudget" type="text" value="11.613.983 €" readonly></label>
-        <label>Pressupost inicial disponible<input id="finOperationalOpening" type="text" readonly></label>
+        <label>Pressupost inicial EA<input id="finInitialBudget" type="text" readonly></label>
+        <label>Pressupost operatiu inicial<input id="finOperationalOpening" type="text" readonly></label>
         <label>Pressupost disponible ara<input id="finBudget" type="text" readonly></label>
         <label>Massa salarial inicial<input id="finInitialWages" type="text" readonly></label>
         <label>Massa salarial actual<input id="finWages" type="text" readonly></label>
@@ -719,6 +719,8 @@ const RULES_OBJECTIVES_V4='barcaCareerDirectorRulesObjectivesV4';
 if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V4,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const RULES_OBJECTIVES_V5='barcaCareerDirectorRulesObjectivesV5';
 if(!localStorage.getItem(RULES_OBJECTIVES_V5)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);state.target=base.target;state.clubStatus=base.clubStatus;state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V5,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+const BARCA_FINANCE_V1='barcaCareerDirectorFinanceV1';
+if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=150.4;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BUDGET_BASELINE_2026_FIX='barcaCareerDirectorBudgetBaseline2026V1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_FIX)){
   state.finance=state.finance||{};
@@ -1951,14 +1953,14 @@ function renderFinancePanel(){
     const initial=$('#finInitialBudget'),opening=$('#finOperationalOpening'),available=$('#finBudget'),
           initialW=$('#finInitialWages'),currentW=$('#finWages'),growth=$('#finWageGrowth'),
           summary=$('#financeSummary'),ledgerBox=$('#financeLedger');
-    if(initial)initial.value='11.613.983 €';
+    if(initial)initial.value=money(fm.initialBudget);
     if(opening)opening.value=money(fm.openingOperational);
     if(available)available.value=money(fm.available);
     if(initialW)initialW.value=wageKDisplay(fm.initialWages)+' k€/set.';
     if(currentW)currentW.value=wageKDisplay(fm.currentWages)+' k€/set.';
     if(growth)growth.value=(fm.wageGrowth>=0?'+':'')+(fm.wageGrowth*100).toFixed(1)+'%';
     if(summary)summary.innerHTML=`<div class="summary-grid">
-      <div class="summary-box"><small>Pressupost inicial EA</small><strong>€11.613.983</strong></div>
+      <div class="summary-box"><small>Pressupost inicial EA</small><strong>${money(fm.initialBudget)}</strong></div>
       <div class="summary-box"><small>Despesa mercat</small><strong>${money(fm.transferSpend)}</strong></div>
       <div class="summary-box"><small>Ingressos mercat</small><strong>${money(fm.transferIncome)}</strong></div>
       <div class="summary-box"><small>Reinversió vendes (70%)</small><strong>${money(fm.reinvestableIncome)}</strong></div>
@@ -1974,7 +1976,7 @@ function renderFinancePanel(){
     </div>`;
     if(ledgerBox){
       const ledger=financeLedgerRows();
-      ledgerBox.innerHTML=ledger.length?`<div class="table-wrap"><table><thead><tr><th>Tipus</th><th>Jugador / operació</th><th>Impacte</th><th>Detall</th></tr></thead><tbody>${ledger.map(x=>`<tr><td>${x.kind}</td><td><strong>${x.name}</strong></td><td>${x.weekly!==undefined?(x.weekly>=0?'+':'')+wageKDisplay(x.weekly)+' k€/set.':(x.amount>=0?'+':'')+money(Math.abs(x.amount))}</td><td>${x.detail}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-inline">Sense moviments encara. El pressupost inicial disponible és €11.613.983.</div>';
+      ledgerBox.innerHTML=ledger.length?`<div class="table-wrap"><table><thead><tr><th>Tipus</th><th>Jugador / operació</th><th>Impacte</th><th>Detall</th></tr></thead><tbody>${ledger.map(x=>`<tr><td>${x.kind}</td><td><strong>${x.name}</strong></td><td>${x.weekly!==undefined?(x.weekly>=0?'+':'')+wageKDisplay(x.weekly)+' k€/set.':(x.amount>=0?'+':'')+money(Math.abs(x.amount))}</td><td>${x.detail}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-inline">Sense moviments encara. El pressupost inicial disponible és '+money(fm.initialBudget)+'.</div>';
     }
     return fm;
   }catch(e){console.error('finance panel render',e);return null;}
@@ -2351,7 +2353,7 @@ setTimeout(()=>cloudLoad(),50);
       const f=await r.json();
       const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val};
       const setText=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
-      setVal('finInitialBudget','11.613.983 €');
+      setVal('finInitialBudget','150,4 M€');
       setVal('finOperationalOpening',euroM(f.initialBudget));
       setVal('finBudget',euroM(f.available));
       setVal('finInitialWages',wageK(f.initialWages));
