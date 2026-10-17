@@ -1893,8 +1893,7 @@ async function directorConversationalReply(text){
   });
   if(!r.ok){
     const err=await r.json().catch(()=>({}));
-    if(err.code==='AI_NOT_CONFIGURED')return null;
-    throw new Error(err.error||'Director AI unavailable');
+    throw new Error((err.code?err.code+': ':'')+(err.error||('HTTP '+r.status)));
   }
   const d=await r.json();
   return String(d.answer||'').trim();
@@ -1911,17 +1910,14 @@ async function sendDirectorChat(textOverride){
   renderTransferLab();
   const i=state.directorChat.length-1;
   try{
-    let natural=null;
-    try{natural=await directorConversationalReply(text)}catch(e){console.error('director conversational',e)}
-    if(natural){
-      const safe=natural.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
-      state.directorChat[i]={role:'ai',html:'<span class="decision-tag good">GROQ AI</span><strong>Director esportiu</strong>'+safe};
-    }else{
-      state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">IA NO CONNECTADA</span><strong>Director esportiu</strong>Groq no està disponible ara mateix. Revisa la configuració del backend.'};
-    }
+    const natural=await directorConversationalReply(text);
+    if(!natural)throw new Error('Resposta buida del Director AI');
+    const safe=natural.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+    state.directorChat[i]={role:'ai',html:'<span class="decision-tag good">GROQ AI</span><strong>Director esportiu</strong>'+safe};
   }catch(e){
     console.error('director ai failed',e);
-    state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR GROQ</span><strong>Director esportiu</strong>No he pogut connectar amb el Director AI. Torna-ho a provar en uns segons.'};
+    const msg=String(e?.message||e||'Error desconegut').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR IA</span><strong>Director esportiu</strong>'+msg};
   }
   save();
 }
