@@ -649,21 +649,23 @@ const DEFAULT_OBJECTIVES=[
 {name:'Cantera amb pes real',detail:'Mínim un jugador de La Masia ha de tenir un rol rellevant a la temporada.',progress:0,weight:10,status:'active',priority:'Mitjana',review:'Gener / Maig'}
 ];
 const DEFAULT_RULES=[
-['Mercat d’estiu','Màxim 4 incorporacions de primer equip. Més de 3 només si hi ha venda important, lesió greu o dèficit estructural.','Mercat'],
-['Mercat d’hivern','Màxim 2 incorporacions, i només si resolen una necessitat real.','Mercat'],
-['Pressupost','Es pot utilitzar el pressupost disponible del joc, però les operacions han de tenir sentit esportiu i financer.','Finances'],
-['Escala salarial','Un fitxatge pot entrar al top salarial només si és titular clar o jugador franquícia.','Finances'],
-['Jugador franquícia','Només una incorporació per temporada pot trencar clarament l’escala salarial.','Finances'],
-['Scouting','No utilitzar potencial ocult. Les decisions s’han de basar en rendiment, OVR actual, rol, edat, encaix i context.','Scouting'],
-['Abast geogràfic','El Barça pot fitxar globalment. La prioritat és encaix esportiu, no nacionalitat.','Identitat'],
-['Veterans','No hi ha límit rígid, però fitxatges de 30+ anys han de tenir rol i cost clarament justificats.','Mercat'],
-['Cessions i agents lliures','Sense límit artificial, però han de tenir sentit de plantilla i cost.','Mercat'],
-['Venda natural','Si arriba una oferta molt forta per un jugador no estructural, es pot vendre encara que no hi hagi necessitat financera.','Vendes'],
-['Mida de plantilla','Objectiu 23–26 jugadors útils. Evitar acumulació de perfils redundants.','Plantilla'],
-['Cantera','La Masia és part estructural del projecte. Com a mínim un jove ha de tenir impacte real cada temporada.','Cantera'],
-['Prestigi','El Barça ja és un club d’elit. El realisme es mesura per exigència, coherència i sostenibilitat, no per evitar grans fitxatges.','Prestigi'],
-['Reality Override','Si una regla numèrica produeix una decisió absurda, preval el realisme amb justificació registrada.','Governança'],
-['Regla d’or','Podem fracassar, però no manipulem resultats ni normes per protegir la carrera.','Governança']
+['Pressupost','No es pot superar el pressupost real disponible al joc. Aquesta és una restricció dura.','Finances'],
+['Potencial ocult','Prohibit utilitzar potencials ocults, wonderkid lists o informació que el club no podria conèixer. Restricció dura.','Scouting'],
+['Mida màxima','Màxim 27 jugadors actius de primer equip. A partir d’aquí cal donar sortides abans de fitxar. Restricció dura.','Plantilla'],
+['Mercat d’estiu','Sense límit fix de fitxatges. 4 o més incorporacions generen alerta de rotació excessiva i s’han de justificar esportivament.','Mercat'],
+['Mercat d’hivern','Sense límit fix. Cada incorporació ha de resoldre una necessitat clara, una lesió, una oportunitat o una venda prèvia.','Mercat'],
+['Escala salarial','No hi ha bloqueig automàtic per salari. Un nou top salarial només és coherent si el jugador és estructural, titular clar o estrella.','Finances'],
+['Jugador franquícia','Es poden tenir diverses estrelles. El control és la coherència entre salari, rol, edat, rendiment i jerarquia de vestidor.','Finances'],
+['Abast geogràfic','Mercat global. El Barça pot fitxar a qualsevol lliga si hi ha encaix tècnic, tàctic i econòmic.','Identitat'],
+['Veterans','Cap límit numèric per edat. Els fitxatges de 30+ han de justificar cost, durada i rol.','Mercat'],
+['Cessions','Sense límit artificial. Han de servir per desenvolupament, cobertura temporal o oportunitat de mercat.','Mercat'],
+['Agents lliures','Sense límit artificial. Mateix criteri que qualsevol fitxatge: necessitat, nivell, salari i rol.','Mercat'],
+['Venda natural','No hi ha intocables absoluts. Una oferta excepcional pot justificar una venda si hi ha recanvi i sentit esportiu.','Vendes'],
+['Mida ideal','Objectiu de 23–26 jugadors útils. 27 és el màxim, no l’objectiu.','Plantilla'],
+['La Masia','Com a mínim un U21 format al club ha de tenir impacte real: objectiu 1.000 minuts o 20 aparicions.','Cantera'],
+['Rotació de plantilla','Evitar canviar mitja plantilla en un sol mercat. El Director AI ha d’alertar quan hi ha massa altes o baixes.','Coherència'],
+['Prestigi','El Barça pot aspirar als millors jugadors del món. El realisme no és fitxar poc, sinó fitxar amb sentit.','Prestigi'],
+['Regla d’or','No reiniciem partits, no manipulem resultats i acceptem conseqüències esportives i econòmiques.','Governança']
 ];
 const base={directorChat:[],season:'2026/27',position:'—',target:'Guanyar LaLiga',clubStatus:9.2,projectStage:'Fase 1 · Competir per tots els títols',tactic:'4-3-3',lineup:{starters:{},bench:[]},points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:150.4,initialWageByPlayer:{},baselineLocked:false,budgetSource:'EA available transfer budget'},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
 const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
@@ -1089,48 +1091,21 @@ function validateTransferRules(t){
   if(!incomingTypes.includes(t.type))return errors;
 
   const incoming=state.transfers.filter(x=>incomingTypes.includes(x.type));
-  const summer=incoming.filter(x=>(x.window||'Estiu')==='Estiu');
-  const winter=incoming.filter(x=>x.window==='Hivern');
-  const starterSummer=summer.filter(x=>x.role==='Titular');
-  const veterans=incoming.filter(x=>num(x.age)>30);
-  const loans=incoming.filter(x=>x.type==='Cessió entrada');
-  const free=incoming.filter(x=>x.type==='Agent lliure');
-  const franchise=incoming.filter(x=>x.franchise==='Sí');
-  const overrideOk=validRealityOverride(t);
 
   if(t.hiddenPotential==='Sí') errors.push('No es pot utilitzar potencial ocult o informació externa de potencial per decidir un fitxatge.');
 
-  if((t.window||'Estiu')==='Estiu'){
-    if(summer.length>=4 && !overrideOk) errors.push('Màxim 4 incorporacions d’estiu. Una cinquena només és admissible amb un Reality Override justificat.');
-    if(t.role==='Titular' && starterSummer.length>=3 && !overrideOk) errors.push('Màxim 3 fitxatges pensats com a titulars immediats a l’estiu.');
-  }
-
-  if(t.window==='Hivern' && winter.length>=2 && !overrideOk){
-    errors.push('Màxim 2 incorporacions d’hivern, i només si responen a una necessitat real.');
-  }
 
   
   
   
-
-  const lastSeason=state.history&&state.history[0];
-  if(t.franchise==='Sí'){
-    if(franchise.length>=1) errors.push('Ja s’ha utilitzat el jugador franquícia aquesta temporada.');
-    if(lastSeason&&lastSeason.franchiseUsed) errors.push('La regla de jugador franquícia només permet una excepció cada dues temporades.');
-  }
-
-  const topWage=Math.max(0,...state.squad.map(p=>num(p.wage)));
-  if(topWage>0 && num(t.wage)>topWage*1.10 && t.franchise!=='Sí'){
-    errors.push('El salari supera el 110% del salari més alt de la plantilla. Cal que sigui l’excepció de jugador franquícia.');
-  }
 
   const fm=financialModel();
   if(['Compra','Agent lliure','Cessió entrada'].includes(t.type) && num(t.amount)>0 && fm.transferSpend+num(t.amount)>fm.openingOperational+fm.reinvestableIncome){
     errors.push('L’operació superaria el pressupost operatiu realista disponible ('+money(Math.max(0,fm.available))+' restants).');
   }
 
-  if(activeSquad().length>=26 && ['Compra','Agent lliure','Cessió entrada'].includes(t.type) && !overrideOk){
-    errors.push('La plantilla activa ja té '+activeSquad().length+' jugadors. Cal donar sortida a algú abans d’una nova incorporació.');
+  if(activeSquad().length>=27 && ['Compra','Agent lliure','Cessió entrada'].includes(t.type)){
+    errors.push('La plantilla activa ja té '+activeSquad().length+' jugadors. El màxim és 27: cal donar una sortida abans de fitxar.');
   }
 
   return errors;
