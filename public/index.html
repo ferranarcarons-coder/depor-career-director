@@ -1418,11 +1418,22 @@ function playerImportance(p){let pts=50;const role=normalizeDirectorText(p.role)
 function outgoingAdvice(p,mode,offer=0){
  const importance=playerImportance(p),age=num(p.age),mins=num(p.minutes),delta=ovrDelta(p),value=num(p.value),depth=squadDepthFor(p);
  if(mode==='loan'){
-   let score=30;const why=[];
-   if(age<=21){score+=25;why.push('edat ideal per desenvolupar-se')}
+   let score=25;const why=[];
+   const role=roleWeight(p.role),ovr=playerCareerOvr(p);
+   const rotation=sportingRotationSets();
+   const starter=rotation.starters.has(p.playerId),bench=rotation.bench.has(p.playerId);
+   if(role>=4){score-=35;why.push('rol important o clau')}
+   if(ovr>=82){score-=30;why.push('nivell de primer equip alt')}
+   else if(ovr>=78){score-=18;why.push('nivell útil de primer equip')}
+   if(starter){score-=35;why.push(rotation.source==='manual'?'forma part de l’XI':'entra a l’XI orientatiu per nivell')}
+   else if(bench){score-=18;why.push(rotation.source==='manual'?'forma part de la banqueta':'entra a la rotació orientativa')}
+   if(age<=21&&role<=2&&ovr<78){score+=28;why.push('edat i rol compatibles amb desenvolupament per cessió')}
+   else if(age<=23&&role<=2&&ovr<80){score+=18;why.push('perfil jove amb marge per guanyar minuts fora')}
    if(age>=24){score-=25;why.push('ja no és perfil natural de cessió')}
-   if(mins<500){score+=22;why.push('pocs minuts')} else if(mins>1200){score-=15;why.push('ja té participació útil')}
-   if(depth>=4){score+=12;why.push('molta competència a la posició')} else if(depth<=2){score-=10;why.push('poca profunditat a la posició')}
+   if(mins<500&&role<=2&&!starter&&!bench){score+=18;why.push('pocs minuts i fora de la rotació')}
+   else if(mins>1200){score-=15;why.push('ja té participació útil')}
+   if(depth>=4&&role<=2){score+=10;why.push('molta competència a la posició')}
+   else if(depth<=2){score-=10;why.push('poca profunditat a la posició')}
    if(delta>0)score-=5;
    score=Math.max(0,Math.min(100,score));
    return {score,label:score>=65?'CEDIR':score>=45?'VALORAR CESSIÓ':'QUEDAR-SE',cls:score>=65?'good':score>=45?'warn':'bad',text:(why.join(' · ')||'No hi ha una necessitat clara de cessió.')};
@@ -1443,7 +1454,17 @@ function positionFromText(text){const t=normalizeDirectorText(text);const map=[[
 function cleanPlayerQuery(text){return String(text||'').replace(/\b(veus|creus|seria|es|és|realista|fitxar|fitxaria|comprar|fichar|ficharia|al|el|la|pel|per|depor|dépor|rc deportivo|podriem|podríem|que|un|una)\b/gi,' ').replace(/[?¿!¡.,:;]/g,' ').replace(/\s+/g,' ').trim()}
 async function directorSigningAdvice(text){const q=cleanPlayerQuery(text);if(q.length<2)return {label:'NECESSITO EL NOM',cls:'warn',text:'Digues-me quin jugador estàs valorant.'};const sr=await fetch('/api/players/search?q='+encodeURIComponent(q));const sd=await sr.json();const ref=(sd.players||[])[0];if(!ref)return {label:'NO TROBAT',cls:'warn',text:'No he trobat aquest jugador a la BBDD FC27.'};const dr=await fetch('/api/players/detail?'+new URLSearchParams({id:ref.id||'',name:ref.name||''}));const dd=await dr.json();const p=dd.player||ref;const current=careerOvrForName(p.name,p.overall)||p.overall;const expected=num(current)>=80?'Titular':num(current)>=75?'Rotació':'Aposta';const a={player:p.name,position:p.position,age:p.age,club:p.club,market:inferMarketFromNationality(p.nationality),playerLevel:overallToLevel(current),originLevel:inferOriginLevel(p.club,p.league,current),overall:current,currentRole:'Titular',expectedRole:expected,type:'Compra',hiddenPotential:'No',franchise:'No',context:'Normal',override:'No'};const r=transferFit(a);return {label:r.verdict.toUpperCase()+' · '+r.score+'/100',cls:r.cls,text:r.recommend+(r.reasons.length?' '+r.reasons.slice(0,3).join(' · '):'')}}
 async function directorPositionAdvice(pos){const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=5');const d=await r.json();const list=d.players||[];if(!list.length)return {label:'SENSE CANDIDATS',cls:'warn',text:'No he trobat candidats adequats.'};return {label:'TOP '+pos,cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · '+p.club+' · OVR '+p.overall+' · Fit '+p.scoutingScore+'/100').join('<br>')}}
-function squadSellCandidates(mode){if(!state.squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};const list=state.squad.map(p=>({p,a:outgoingAdvice(p,mode)})).sort((x,y)=>y.a.score-x.a.score).slice(0,5);return {label:mode==='loan'?'CANDIDATS A CESSIÓ':'CANDIDATS A VENDA',cls:'good',text:list.map((x,i)=>(i+1)+'. '+x.p.name+' · '+x.a.label+' · '+x.a.score+'/100 · '+x.a.text).join('<br><br>')}}
+function squadSellCandidates(mode){
+  if(!state.squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};
+  const minScore=mode==='loan'?55:48;
+  const list=activeSquad()
+    .map(p=>({p,a:outgoingAdvice(p,mode)}))
+    .filter(x=>x.a.score>=minScore)
+    .sort((x,y)=>y.a.score-x.a.score)
+    .slice(0,5);
+  if(!list.length)return {label:mode==='loan'?'NO CEDIRIA NINGÚ ARA':'CAP VENDA PRIORITÀRIA',cls:'good',text:mode==='loan'?'Amb la plantilla actual no veig cap cessió clara. No enviaria fora un jugador important només perquè encara no hi ha minuts registrats.':'No forçaria cap venda ara mateix; escoltaria el mercat abans de prendre decisions.'};
+  return {label:mode==='loan'?'CANDIDATS REALS A CESSIÓ':'CANDIDATS A VENDA',cls:'good',text:list.map((x,i)=>(i+1)+'. <strong>'+x.p.name+'</strong> · '+x.a.label+' · '+x.a.score+'/100<br>'+x.a.text).join('<br><br>')};
+}
 function normalizeNameForMatch(v){return normalizeDirectorText(v).replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim()}
 async function enrichSquadFromFc27(){
   const btn=$('#enrichSquadBtn'),status=$('#squadEnrichStatus');
@@ -1483,6 +1504,24 @@ async function enrichSquadFromFc27(){
 }
 function lineupStarterIdSet(){return new Set(Object.values(state.lineup?.starters||{}).filter(Boolean))}
 function lineupBenchIdSet(){return new Set((state.lineup?.bench||[]).filter(Boolean))}
+function sportingRotationSets(){
+  const manualStarters=lineupStarterIdSet(),manualBench=lineupBenchIdSet();
+  const manualCount=manualStarters.size+manualBench.size;
+  if(manualStarters.size>=8 || manualCount>=14){
+    return {starters:manualStarters,bench:manualBench,source:'manual'};
+  }
+  const xi=buildBestXI().map(x=>x.p).filter(Boolean);
+  const starters=new Set(xi.map(p=>p.playerId));
+  const remaining=activeSquad()
+    .filter(p=>!starters.has(p.playerId))
+    .sort((a,b)=>{
+      const roleDiff=roleWeight(b.role)-roleWeight(a.role);
+      if(roleDiff)return roleDiff;
+      return playerCareerOvr(b)-playerCareerOvr(a);
+    })
+    .slice(0,9);
+  return {starters,bench:new Set(remaining.map(p=>p.playerId)),source:'inferred'};
+}
 function roleWeight(role){
   const r=normalizeDirectorText(role);
   if(r.includes('clave'))return 5;if(r.includes('importante'))return 4;if(r.includes('rotacion'))return 3;if(r.includes('ocasional'))return 2;if(r.includes('promesa'))return 1;return 3;
@@ -1557,7 +1596,7 @@ function wageContext(){
   return {sorted:s,rank,median,top:num(s[0]?.wage)};
 }
 function playerDecisionPlan(){
-  const starters=lineupStarterIdSet(),bench=lineupBenchIdSet(),w=wageContext();
+  const rotation=sportingRotationSets(),starters=rotation.starters,bench=rotation.bench,w=wageContext();
   return activeSquad().map(p=>{
     const starter=starters.has(p.playerId),onBench=bench.has(p.playerId),role=roleWeight(p.role),age=num(p.age),contract=num(p.contractYears),wage=num(p.wage),mins=num(p.minutes),sell=outgoingAdvice(p,'sell'),loan=outgoingAdvice(p,'loan');
     let action='MANTENER',cls='keep',priority=30,reasons=[];
@@ -1568,16 +1607,17 @@ function playerDecisionPlan(){
     } else {
       if(contract>0&&contract<=1&& (starter||role>=4)){action='RENOVAR ARA';cls='renew';priority=92;reasons.push('peça important amb ≤1 any de contracte');}
       else if(contract>1&&contract<=2&&(starter||role>=4)){action='PREPARAR RENOVACIÓ';cls='renew';priority=74;reasons.push('entra en finestra de renovació');}
-      else if(age<=22&&!starter&&!onBench&&loan.score>=60){action='CEDIR';cls='loan';priority=68;reasons.push('jove sense espai real a l’XI/banqueta');}
+      else if(age<=23&&role<=2&&!starter&&!onBench&&loan.score>=65){action='CEDIR';cls='loan';priority=68;reasons.push('jove de rol secundari fora de la rotació i amb necessitat de minuts');}
       else if(sell.score>=68&&!starter){action='VENDRE';cls='sell';priority=70;reasons.push('poc pes esportiu i context favorable de sortida');}
       else if(sell.score>=52&&!starter){action='ESCOLTAR OFERTES';cls='review';priority=54;reasons.push('prescindible si arriba bona oferta');}
-      else if(starter){action='MANTENER';cls='keep';priority=40;reasons.push('forma part de l’XI titular');}
-      else if(onBench){action='MANTENER ROTACIÓ';cls='keep';priority=34;reasons.push('forma part de la banqueta principal');}
+      else if(starter){action='MANTENIR';cls='keep';priority=40;reasons.push(rotation.source==='manual'?'forma part de l’XI titular':'entra a l’XI orientatiu per nivell i posició');}
+      else if(onBench){action='MANTENIR ROTACIÓ';cls='keep';priority=34;reasons.push(rotation.source==='manual'?'forma part de la banqueta principal':'entra a la rotació orientativa per nivell/rol');}
+      else if(role>=4||playerCareerOvr(p)>=80){action='MANTENIR';cls='keep';priority=38;reasons.push('pes esportiu suficient per continuar al primer equip');}
     }
     const wageRank=w.rank.get(p.playerId)||0;
-    if(wageRank&&wageRank<=3&&!starter&&role<=3){reasons.push('salari Top '+wageRank+' sense pes equivalent');priority+=12;if(action==='MANTENER ROTACIÓ'){action='REVISAR COST/ROL';cls='review';}}
-    if(starter&&w.median&&wage<w.median*.75&&role>=4){reasons.push('salari baix pel seu pes');if(action==='MANTENER'){action='REVISAR RENOVACIÓ';cls='renew';priority=Math.max(priority,58);}}
-    if(age>=31&&!starter&&action==='MANTENER ROTACIÓ'){action='PLANIFICAR SORTIDA';cls='review';priority=58;reasons.push('veterà fora de l’XI');}
+    if(wageRank&&wageRank<=3&&!starter&&role<=3){reasons.push('salari Top '+wageRank+' sense pes equivalent');priority+=12;if(action==='MANTENIR ROTACIÓ'){action='REVISAR COST/ROL';cls='review';}}
+    if(starter&&w.median&&wage<w.median*.75&&role>=4){reasons.push('salari baix pel seu pes');if(action==='MANTENIR'){action='REVISAR RENOVACIÓ';cls='renew';priority=Math.max(priority,58);}}
+    if(age>=31&&!starter&&action==='MANTENIR ROTACIÓ'){action='PLANIFICAR SORTIDA';cls='review';priority=58;reasons.push('veterà fora de l’XI');}
     if(!reasons.length)reasons.push('situació estable');
     return {p,action,cls,priority:Math.min(100,priority),starter,onBench,wageRank,reasons};
   }).sort((a,b)=>b.priority-a.priority);
@@ -1804,7 +1844,7 @@ function renderSquadAnalysis(scroll=false){
         (exec.length?exec.map((x,i)=>'<div class="exec-plan-item"><span class="priority-rank">'+(i+1)+'</span><div><strong>'+x.title+'</strong><p>'+x.detail+'</p></div></div>').join(''):'<div class="exec-plan-item"><span class="priority-rank">✓</span><div><strong>Sense urgències</strong><p>No hi ha cap decisió immediata evident.</p></div></div>')+
       '</div></section>'+
       '<section class="analysis-section"><div class="analysis-section-head"><h3>Pla jugador per jugador</h3><span>TOP '+decisions.length+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Jugador</th><th>Situació</th><th>Acció</th><th>Per què</th></tr></thead><tbody>'+
-        decisions.map(x=>'<tr><td><strong>'+x.p.name+'</strong><br><small>'+x.p.pos+' · '+x.p.age+' anys · '+(x.p.role||'—')+'</small></td><td>'+(x.starter?'Titular':x.onBench?'Banqueta':'Fora XI/banqueta')+(x.wageRank?' · salari #'+x.wageRank:'')+'</td><td><span class="action-chip '+x.cls+'">'+x.action+'</span></td><td>'+x.reasons.join(' · ')+'</td></tr>').join('')+
+        decisions.map(x=>'<tr><td><strong>'+x.p.name+'</strong><br><small>'+x.p.pos+' · '+(x.p.age??'—')+' anys · '+(x.p.role||'—')+'</small></td><td>'+(x.starter?(sportingRotationSets().source==='manual'?'Titular':'XI orientatiu'):x.onBench?(sportingRotationSets().source==='manual'?'Banqueta':'Rotació orientativa'):'Fora rotació')+(x.wageRank?' · salari #'+x.wageRank:'')+'</td><td><span class="action-chip '+x.cls+'">'+x.action+'</span></td><td>'+x.reasons.join(' · ')+'</td></tr>').join('')+
       '</tbody></table></div></section>'+
       '<section class="analysis-section"><div class="analysis-section-head"><h3>Mapa de profunditat tàctica</h3><span>'+(state.tactic||'4-3-3')+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Posició</th><th>Titular(s)</th><th>Recanvi(s)</th><th>Urgència</th><th>Diagnòstic</th></tr></thead><tbody>'+
         positions.map(x=>'<tr><td><strong>'+x.label+'</strong></td><td>'+(x.starters.length?x.starters.map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+(x.backups.length?x.backups.slice(0,2).map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+x.urgency+'/100</td><td>'+(x.reasons.join(' · ')||'cobertura correcta')+'</td></tr>').join('')+
@@ -1830,12 +1870,14 @@ async function directorReply(text){
  if(player&&intent==='role')return directorRoleAdvice(player,text);
  if(player&&intent==='minutes')return directorMinutesAdvice(player);
  if(t.includes('oferta')&&player){const offer=extractOfferAmount(text);const a=outgoingAdvice(player,'sell',offer);return {label:a.label+(offer?' · '+offer+' M€':''),cls:a.cls,text:player.name+': '+a.text+'. Importància interna '+playerImportance(player)+'/100.'}}
- if((t.includes('a qui')||t.includes('quien'))&&(t.includes('cedir')||t.includes('cessio')||t.includes('cesion')))return squadSellCandidates('loan');
- if((t.includes('a qui')||t.includes('quien'))&&(t.includes('vendre')||t.includes('vender')||t.includes('venda')||t.includes('venta')))return squadSellCandidates('sell');
+ if(intent==='loan'&&!player&&(t.includes('qui')||t.includes('quins')||t.includes('quines')||t.includes('jugadors')||t.includes('cediries')||t.includes('haurien de cedir')))return squadSellCandidates('loan');
+ if(intent==='sell'&&!player&&(t.includes('qui')||t.includes('quins')||t.includes('quines')||t.includes('jugadors')||t.includes('vendries')||t.includes('haurien de vendre')))return squadSellCandidates('sell');
  if(t.includes('intocable')||t.includes('no tocaria vendre')){const list=[...state.squad].sort((a,b)=>playerImportance(b)-playerImportance(a)).slice(0,5);return {label:'INTOCABLES ACTUALS',cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · Importància '+playerImportance(p)+'/100 · OVR '+playerCareerOvr(p)).join('<br>')}}
  if(intent==='sign')return directorSigningAdvice(text);
  if(player)return directorGeneralPlayerAdvice(player);
- return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Puc ajudar-te amb renovacions, vendes, cessions, fitxatges, rols, minuts, jerarquia salarial, contractes i necessitats de plantilla. Si és una continuació del tema anterior, no cal que repeteixis el jugador.'};
+ if(intent==='loan')return squadSellCandidates('loan');
+ if(intent==='sell')return squadSellCandidates('sell');
+ return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Digues-me la decisió que vols prendre o el perfil que busques. Puc prioritzar fitxatges, vendes, cessions, renovacions, rols i necessitats de plantilla amb el context actual del Barça.'};
 }
 async function sendDirectorChat(textOverride){const input=$('#directorChatInput');const text=String(textOverride||input?.value||'').trim();if(!text)return;state.directorChat=state.directorChat||[];state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});if(input)input.value='';renderTransferLab();state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Analitzant el context…'});renderTransferLab();const i=state.directorChat.length-1;try{const a=await directorReply(text);state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text}}catch(e){state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'}}save()}
 function playerCareerOvr(p){return num(p.currentOvr||p.ovr||p.baseOvr||0)}
