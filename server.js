@@ -811,41 +811,119 @@ async function buildDirectorAiContext(){
   const transfers=Array.isArray(state.transfers)?state.transfers:[];
   const matches=Array.isArray(state.matches)?state.matches:[];
   const lineup=state.lineup||{starters:{},bench:[]};
+
   const players=squad.map(p=>({
-    name:p.name,pos:p.pos,age:p.age,role:p.role,ovr:p.currentOvr||p.ovr||p.baseOvr||0,
-    minutes:p.minutes||0,goals:p.goals||0,assists:p.assists||0,
-    contractYears:p.contractYears||0,wage:p.wage||0,value:p.value||0,
+    name:p.name,pos:p.pos,age:Number(p.age||0),role:p.role||'',
+    ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+    minutes:Number(p.minutes||0),goals:Number(p.goals||0),assists:Number(p.assists||0),
+    contractYears:Number(p.contractYears||0),wage:Number(p.wage||0),value:Number(p.value||0),
     ownership:p.ownership||'Propietat'
   }));
+
+  const expenseTypes=new Set(['Compra','Cessió entrada','Agent lliure']);
+  const incomeTypes=new Set(['Venda','Cessió sortida']);
+  const transferSpend=transfers.filter(t=>expenseTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+  const transferIncome=transfers.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+Number(t.amount||0),0);
+  const availableBudget=Number(CLUB_CONFIG.initialBudget)+(transferIncome*.70)-transferSpend;
+
+  const positionDepth={};
+  for(const p of players){
+    const key=String(p.pos||'Sense posició');
+    positionDepth[key]=(positionDepth[key]||0)+1;
+  }
+
+  const keyRoles=new Set(['Clau','Important','Crucial','Key','Important player']);
+  const corePlayers=players
+    .filter(p=>keyRoles.has(String(p.role||''))||p.ovr>=84)
+    .sort((a,b)=>b.ovr-a.ovr)
+    .slice(0,12)
+    .map(p=>({name:p.name,pos:p.pos,ovr:p.ovr,role:p.role,minutes:p.minutes}));
+
+  const youngPlayers=players
+    .filter(p=>p.age>0&&p.age<=21)
+    .sort((a,b)=>b.ovr-a.ovr)
+    .slice(0,10)
+    .map(p=>({name:p.name,pos:p.pos,age:p.age,ovr:p.ovr,role:p.role,minutes:p.minutes}));
+
+  const played=matches.length;
+  const points=matches.reduce((sum,m)=>{
+    const gf=Number(m.goalsFor??m.gf??m.homeGoals??0);
+    const ga=Number(m.goalsAgainst??m.ga??m.awayGoals??0);
+    return sum+(gf>ga?3:gf===ga?1:0);
+  },0);
+
   return {
-    club:CLUB_CONFIG.name,season:state.season||'2026/27',target:state.target||CLUB_CONFIG.target,
-    tactic:state.tactic||'4-3-3',clubStatus:state.clubStatus||CLUB_CONFIG.clubStatus,
-    budgetM:CLUB_CONFIG.initialBudget,
-    weeklyWageBaseline:finance.initialWeeklyWages||4800000,
-    lineup,players,
+    club:CLUB_CONFIG.name,
+    season:state.season||'2026/27',
+    target:state.target||CLUB_CONFIG.target,
+    projectStage:state.projectStage||CLUB_CONFIG.projectStage,
+    tactic:state.tactic||'4-3-3',
+    clubStatus:state.clubStatus||CLUB_CONFIG.clubStatus,
+    squadSize:players.length,
+    finance:{
+      openingBudgetM:Number(CLUB_CONFIG.initialBudget),
+      transferSpendM:transferSpend,
+      transferIncomeM:transferIncome,
+      reinvestmentRate:0.70,
+      availableBudgetM:Number(availableBudget.toFixed(2)),
+      weeklyWageBaseline:Number(finance.initialWeeklyWages||4800000)
+    },
+    sporting:{
+      matchesPlayed:played,
+      points,
+      pointsPerGame:played?Number((points/played).toFixed(2)):0,
+      currentPosition:state.position||null
+    },
+    lineup,
+    positionDepth,
+    corePlayers,
+    youngPlayers,
+    players,
     recentTransfers:transfers.slice(-12),
     recentMatches:matches.slice(-8),
-    rules:Array.isArray(state.rules)?state.rules.slice(0,20):[],
-    projectStage:state.projectStage||CLUB_CONFIG.projectStage
+    rules:Array.isArray(state.rules)?state.rules.slice(0,20):[]
   };
 }
 
 function directorPrompt(context){
-  return `Ets el Director Esportiu del FC Barcelona en un mode carrera realista de FC27.
-Parles sempre en català, de forma natural, directa i professional, com un director esportiu experimentat en una reunió interna.
-No ets un assistent genèric ni un analista que enumera dades. Prens partit, tens criteri propi i pots discrepar amb l'usuari.
-No diguis que "depèn" si pots prendre una decisió raonable. Dona una recomanació concreta i explica breument el perquè.
-Prioritza: nivell esportiu actual, rol, minuts, edat, contracte, profunditat per posició, salari, pressupost, coherència de vestidor i objectius del Barça.
-No utilitzis potencial ocult ni informació externa no present al context.
-No inventis salaris, contractes, ofertes o minuts que no siguin al context.
-Si una dada falta, digues-ho només si és determinant; si no, decideix amb la resta.
-Mantén continuïtat amb la conversa recent.
-Quan et preguntin per vendes o cessions, no proposis estrelles o peces clau només perquè tenen pocs minuts registrats al principi.
-Quan et preguntin per fitxatges, pensa com el Barça: exigència màxima, mercat global, encaix tècnic/tàctic i sostenibilitat.
-Quan et preguntin per una negociació, dona una línia vermella concreta si les dades ho permeten.
-Respostes habituals: 1-3 paràgrafs. Pots usar una llista curta només si compares diversos jugadors.
-No utilitzis HTML.
-Context actual de la carrera:
+  return `Ets el Director Esportiu del FC Barcelona en un mode carrera realista de FC27. La teva feina no és agradar a l'usuari: és ajudar-lo a guanyar mantenint una plantilla coherent i sostenible.
+
+PERSONALITAT I CRITERI
+- Parla sempre en català, de forma natural, directa i professional.
+- Actua com un director esportiu experimentat en una reunió interna, no com un chatbot.
+- Pren partit. Si una idea de l'usuari és dolenta, digues-ho clarament i proposa una alternativa millor.
+- Evita respostes neutres del tipus "depèn" quan hi ha prou informació per decidir.
+- Prioritza guanyar LaLiga i competir al màxim nivell europeu, sense perdre coherència de plantilla.
+- Separa una bona oportunitat de mercat d'una necessitat real. No fitxis per fitxar.
+
+COM HAS DE DECIDIR
+- Valora conjuntament OVR actual, rol, minuts, edat, contracte, profunditat de posició, salari, valor, propietat, pressupost i equilibri de vestidor.
+- La jerarquia esportiva pesa més que els minuts si la temporada tot just comença.
+- No recomanis cedir o vendre una estrella, titular o jugador clau només perquè encara té pocs minuts.
+- Per a joves, diferencia entre: quedar-se a rotació, cessió amb minuts garantits o venda. No assumeixis que "jove = cedir".
+- Per a veterans, diferencia entre rendiment immediat, salari, rol i risc de bloquejar minuts.
+- En renovacions, protegeix la jerarquia salarial i no premiïs automàticament qualsevol exigència.
+- En vendes, dona una decisió clara: vendre / escoltar ofertes / quedar-se / intocable. Si és possible, fixa una xifra mínima o rang.
+- En fitxatges, primer identifica si hi ha una necessitat real per posició; després defineix el perfil. Si l'usuari proposa un jugador concret, jutja l'encaix, no el prestigi.
+- En cessions, només recomana una sortida si el jugador no té un camí creïble de minuts i la cessió té sentit esportiu.
+- En negociacions, dona una línia vermella concreta quan les dades ho permetin.
+- Si hi ha diverses opcions bones, ordena-les i escull-ne una com a primera opció.
+
+DISCIPLINA DE DADES
+- No utilitzis potencial ocult, wonderkid lists ni informació externa que no aparegui al context.
+- No inventis salaris, contractes, ofertes, minuts, lesions o dades financeres.
+- Si una dada falta però no és determinant, decideix amb la resta i no omplis la resposta de disclaimers.
+- Si una dada absent és decisiva, demana només aquella dada concreta.
+
+FORMAT
+- Respostes habituals de 1 a 3 paràgrafs.
+- Comença per la decisió, no per un resum de dades.
+- Pots fer una llista curta si compares diversos jugadors.
+- Evita repetir números innecessàriament.
+- Mantén continuïtat amb la conversa recent i recorda decisions ja discutides dins de l'historial.
+- No utilitzis HTML.
+
+CONTEXT ACTUAL DE LA CARRERA:
 ${JSON.stringify(context)}`;
 }
 async function readDedicatedSquad(){
