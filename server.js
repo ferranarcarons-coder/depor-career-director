@@ -1277,6 +1277,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (u.pathname === '/api/director/chat' && req.method === 'POST') {
+      console.log('[DIRECTOR_AI_REQUEST]', JSON.stringify({
+        configured:Boolean(process.env.GROQ_API_KEY),
+        model:process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b'
+      }));
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const body=await readBody(req);
       const message=String(body?.message||'').trim();
@@ -1309,9 +1313,17 @@ const server = http.createServer(async (req, res) => {
 
       const data=await rr.json();
       if(!rr.ok){
-        console.error('[DIRECTOR_AI_ERROR]',JSON.stringify(data));
+        console.error('[DIRECTOR_AI_ERROR]',JSON.stringify({
+          status:rr.status,
+          model:process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b',
+          error:data?.error?.message||data?.error||data
+        }));
         return json(res,502,{error:'El Director AI no ha pogut respondre.'});
       }
+      console.log('[DIRECTOR_AI_OK]',JSON.stringify({
+        model:data.model||process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b',
+        chars:String(data?.choices?.[0]?.message?.content||'').length
+      }));
       const answer=String(data?.choices?.[0]?.message?.content||'').trim()||'No he pogut construir una resposta útil.';
       return json(res,200,{answer,model:data.model||process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b'},'no-store');
     }
