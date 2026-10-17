@@ -845,6 +845,43 @@ async function buildDirectorAiContext(){
     .slice(0,10)
     .map(p=>({name:p.name,pos:p.pos,age:p.age,ovr:p.ovr,role:p.role,minutes:p.minutes}));
 
+  const formationMap={
+    '4-3-3':['GK','LB','CB','CB','RB','CM','CM','CAM','RW','LW','ST'],
+    '4-2-3-1':['GK','RB','CB','CB','LB','CDM','CDM','CAM','RW','LW','ST'],
+    '4-4-2':['GK','RB','CB','CB','LB','RM','CM','CM','LM','ST','ST'],
+    '3-4-3':['GK','CB','CB','CB','RM','CM','CM','LM','RW','LW','ST'],
+    '3-5-2':['GK','CB','CB','CB','RM','CM','CDM','CM','LM','ST','ST'],
+    '4-1-4-1':['GK','RB','CB','CB','LB','CDM','RM','CM','CM','LM','ST'],
+    '4-3-2-1':['GK','RB','CB','CB','LB','CM','CDM','CM','CAM','CAM','ST'],
+    '5-3-2':['GK','RB','CB','CB','CB','LB','CM','CDM','CM','ST','ST']
+  };
+  const tactic=state.tactic||'4-3-3';
+  const slots=formationMap[tactic]||formationMap['4-3-3'];
+  const counts={};
+  const slotKeys=slots.map(slot=>{
+    counts[slot]=(counts[slot]||0)+1;
+    return slot+'-'+counts[slot];
+  });
+  const playerById=new Map(squad.map(p=>[p.playerId,p]));
+  const starterIds=new Set(Object.values(lineup.starters||{}).filter(Boolean));
+  const benchIds=new Set((lineup.bench||[]).filter(Boolean));
+  const startingXI=slotKeys.map((key,i)=>{
+    const p=playerById.get(lineup.starters?.[key]);
+    return p?{
+      slot:slots[i],name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+      role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
+    }:{slot:slots[i],name:null};
+  });
+  const benchPlayers=(lineup.bench||[]).map(id=>playerById.get(id)).filter(Boolean).map(p=>({
+    name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+    role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
+  }));
+  const outsideRotation=squad.filter(p=>!starterIds.has(p.playerId)&&!benchIds.has(p.playerId)).map(p=>({
+    name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+    role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
+  }));
+  const lineupDefined=startingXI.filter(x=>x.name).length;
+
   const played=matches.length;
   const points=matches.reduce((sum,m)=>{
     const gf=Number(m.goalsFor??m.gf??m.homeGoals??0);
@@ -857,9 +894,15 @@ async function buildDirectorAiContext(){
     season:state.season||'2026/27',
     target:state.target||CLUB_CONFIG.target,
     projectStage:state.projectStage||CLUB_CONFIG.projectStage,
-    tactic:state.tactic||'4-3-3',
+    tactic,
     clubStatus:state.clubStatus||CLUB_CONFIG.clubStatus,
     squadSize:players.length,
+    rotation:{
+      lineupDefined,
+      startingXI,
+      bench:benchPlayers,
+      outsideRotation
+    },
     finance:{
       openingBudgetM:Number(CLUB_CONFIG.initialBudget),
       transferSpendM:transferSpend,
@@ -874,7 +917,7 @@ async function buildDirectorAiContext(){
       pointsPerGame:played?Number((points/played).toFixed(2)):0,
       currentPosition:state.position||null
     },
-    lineup,
+    lineupRaw:lineup,
     positionDepth,
     corePlayers,
     youngPlayers,
@@ -898,6 +941,9 @@ PERSONALITAT I CRITERI
 
 COM HAS DE DECIDIR
 - Valora conjuntament OVR actual, rol, minuts, edat, contracte, profunditat de posició, salari, valor, propietat, pressupost i equilibri de vestidor.
+- L'alineació manual és una dada prioritària de jerarquia. Si rotation.lineupDefined és alt, tracta rotation.startingXI com el pla titular actual, rotation.bench com la rotació immediata i rotation.outsideRotation com els jugadors que ara mateix tenen menys espai.
+- No ignoris l'alineació quan recomanis vendes, cessions o fitxatges: abans de dir que sobra o falta un perfil, comprova qui ocupa aquell lloc al XI i qui hi ha a la banqueta.
+- Si un jugador és titular a rotation.startingXI, parteix de la hipòtesi que és important per al projecte encara que tingui pocs minuts registrats. Si és a la banqueta, considera'l rotació abans de proposar una cessió.
 - La jerarquia esportiva pesa més que els minuts si la temporada tot just comença.
 - No recomanis cedir o vendre una estrella, titular o jugador clau només perquè encara té pocs minuts.
 - Per a joves, diferencia entre: quedar-se a rotació, cessió amb minuts garantits o venda. No assumeixis que "jove = cedir".
