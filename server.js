@@ -886,6 +886,7 @@ async function serveIndex(res) {
     const initialMap = finance.initialWageByPlayer && typeof finance.initialWageByPlayer === 'object'
       ? finance.initialWageByPlayer : {};
     let initialWages = Number(finance.initialWeeklyWages||0) || Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0) || 4800000;
+    let currentWages = rawCurrentWages > 0 ? rawCurrentWages : initialWages;
 
     if (!Number(finance.initialWeeklyWages||0) && !Object.values(initialMap).some(v=>Number(v||0)>0) && dedicatedSquad.length >= 18) {
       const snap = {};
@@ -894,6 +895,7 @@ async function serveIndex(res) {
       finance.baselineLocked = true;
       finance.initialWageCapturedAt = finance.initialWageCapturedAt || new Date().toISOString();
       initialWages = currentWages;
+      currentWages = rawCurrentWages > 0 ? rawCurrentWages : initialWages;
       initialState.finance = finance;
       try {
         await pool.query(
