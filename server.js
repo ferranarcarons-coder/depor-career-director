@@ -149,8 +149,9 @@ async function initDb() {
         latestAssessment:null,
         finance:{
           initialBudget:CLUB_CONFIG.initialBudget,
+          initialWeeklyWages:4800000,
           initialWageByPlayer:{},
-          baselineLocked:false,
+          baselineLocked:true,
           budgetSource:CLUB_CONFIG.budgetSource,
           budgetBaselineSeason:'2026/27'
         },
@@ -244,6 +245,19 @@ async function initDb() {
   }catch(e){
     console.warn('[BARCA_FINANCE_ENRICH_ERROR]',e.message);
   }
+
+  // BARCA_AGGREGATE_WAGE_BASELINE: authoritative FC27 team wage total.
+  try{
+    const sr=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+    if(sr.rowCount){
+      const d=sr.rows[0].data||{};
+      d.finance={...(d.finance||{}),initialWeeklyWages:4800000};
+      if(!d.finance.wageBaselineSource || String(d.finance.wageBaselineSource).includes('FC Tools Hub')){
+        d.finance.wageBaselineSource='FAFIFA · FC Barcelona FC27 · 7 Oct 2026';
+      }
+      await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(d)]);
+    }
+  }catch(e){console.warn('[BARCA_WAGE_BASELINE_ERROR]',e.message);}
 
   dbReady = true;
   return true;
@@ -772,7 +786,8 @@ async function enrichBarcaSquadFinancials(){
       initialWageByPlayer,
       baselineLocked:true,
       initialWageCapturedAt:new Date().toISOString(),
-      wageBaselineSource:'FC Tools Hub · FC27 player wages'
+      wageBaselineSource:'FC Tools Hub · FC27 player wages',
+      initialWeeklyWages:totalInitialWages
     };
     stateData._clientUpdatedAt=Date.now();
     await pool.query(
@@ -867,12 +882,12 @@ async function serveIndex(res) {
       return wage*(effectiveLoanShareSSR(p)/100);
     };
 
-    const currentWages = dedicatedSquad.reduce((sum,p)=>sum+wageContribution(p),0);
+    const rawCurrentWages = dedicatedSquad.reduce((sum,p)=>sum+wageContribution(p),0);
     const initialMap = finance.initialWageByPlayer && typeof finance.initialWageByPlayer === 'object'
       ? finance.initialWageByPlayer : {};
-    let initialWages = Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0);
+    let initialWages = Number(finance.initialWeeklyWages||0) || Object.values(initialMap).reduce((sum,v)=>sum+Number(v||0),0) || 4800000;
 
-    if (!initialWages && dedicatedSquad.length >= 18) {
+    if (!Number(finance.initialWeeklyWages||0) && !Object.values(initialMap).some(v=>Number(v||0)>0) && dedicatedSquad.length >= 18) {
       const snap = {};
       dedicatedSquad.forEach(p => { if (p.playerId) snap[p.playerId] = wageContribution(p); });
       finance.initialWageByPlayer = snap;
