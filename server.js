@@ -802,6 +802,52 @@ async function enrichBarcaSquadFinancials(){
   return {updated,failed,total:squad.length,totalInitialWages};
 }
 
+
+async function buildDirectorAiContext(){
+  const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+  const state=stateRow.rows[0]?.data||{};
+  const squad=await readDedicatedSquad();
+  const finance=state.finance||{};
+  const transfers=Array.isArray(state.transfers)?state.transfers:[];
+  const matches=Array.isArray(state.matches)?state.matches:[];
+  const lineup=state.lineup||{starters:{},bench:[]};
+  const players=squad.map(p=>({
+    name:p.name,pos:p.pos,age:p.age,role:p.role,ovr:p.currentOvr||p.ovr||p.baseOvr||0,
+    minutes:p.minutes||0,goals:p.goals||0,assists:p.assists||0,
+    contractYears:p.contractYears||0,wage:p.wage||0,value:p.value||0,
+    ownership:p.ownership||'Propietat'
+  }));
+  return {
+    club:CLUB_CONFIG.name,season:state.season||'2026/27',target:state.target||CLUB_CONFIG.target,
+    tactic:state.tactic||'4-3-3',clubStatus:state.clubStatus||CLUB_CONFIG.clubStatus,
+    budgetM:CLUB_CONFIG.initialBudget,
+    weeklyWageBaseline:finance.initialWeeklyWages||4800000,
+    lineup,players,
+    recentTransfers:transfers.slice(-12),
+    recentMatches:matches.slice(-8),
+    rules:Array.isArray(state.rules)?state.rules.slice(0,20):[],
+    projectStage:state.projectStage||CLUB_CONFIG.projectStage
+  };
+}
+
+function directorPrompt(context){
+  return `Ets el Director Esportiu del FC Barcelona en un mode carrera realista de FC27.
+Parles sempre en català, de forma natural, directa i professional, com un director esportiu experimentat en una reunió interna.
+No ets un assistent genèric ni un analista que enumera dades. Prens partit, tens criteri propi i pots discrepar amb l'usuari.
+No diguis que "depèn" si pots prendre una decisió raonable. Dona una recomanació concreta i explica breument el perquè.
+Prioritza: nivell esportiu actual, rol, minuts, edat, contracte, profunditat per posició, salari, pressupost, coherència de vestidor i objectius del Barça.
+No utilitzis potencial ocult ni informació externa no present al context.
+No inventis salaris, contractes, ofertes o minuts que no siguin al context.
+Si una dada falta, digues-ho només si és determinant; si no, decideix amb la resta.
+Mantén continuïtat amb la conversa recent.
+Quan et preguntin per vendes o cessions, no proposis estrelles o peces clau només perquè tenen pocs minuts registrats al principi.
+Quan et preguntin per fitxatges, pensa com el Barça: exigència màxima, mercat global, encaix tècnic/tàctic i sostenibilitat.
+Quan et preguntin per una negociació, dona una línia vermella concreta si les dades ho permeten.
+Respostes habituals: 1-3 paràgrafs. Pots usar una llista curta només si compares diversos jugadors.
+No utilitzis HTML.
+Context actual de la carrera:
+${JSON.stringify(context)}`;
+}
 async function readDedicatedSquad(){
   if(!dbReady) return [];
   const r=await pool.query('SELECT data FROM squad_players ORDER BY updated_at ASC, player_id ASC');
@@ -1228,6 +1274,55 @@ const server = http.createServer(async (req, res) => {
         throw e;
       }
       return json(res,200,{ok:true,transfer:normalized,count:transfers.length});
+    }
+
+    if (u.pathname === '/api/director/chat' && req.method === 'POST') {
+      if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
+      const body=await readBody(req);
+      const message=String(body?.message||'').trim();
+      const history=Array.isArray(body?.history)?body.history.slice(-12):[];
+      if(!message)return json(res,400,{error:'Falta el missatge.'});
+
+      if(!process.env.OPENAI_API_KEY){
+        return json(res,503,{error:'Director AI conversacional no configurat.',code:'AI_NOT_CONFIGURED'});
+      }
+
+      const context=await buildDirectorAiContext();
+      const input=[
+        ...history.map(x=>({role:x.role==='assistant'?'assistant':'user',content:String(x.content||'').slice(0,3000)})),
+        {role:'user',content:message}
+      ];
+
+      const rr=await fetch('https://api.openai.com/v1/responses',{
+        method:'POST',
+        headers:{
+          'authorization':'Bearer '+process.env.OPENAI_API_KEY,
+          'content-type':'application/json'
+        },
+        body:JSON.stringify({
+          model:process.env.DIRECTOR_AI_MODEL||'gpt-6-luna',
+          instructions:directorPrompt(context),
+          input,
+          max_output_tokens:500
+        })
+      });
+
+      const data=await rr.json();
+      if(!rr.ok){
+        console.error('[DIRECTOR_AI_ERROR]',JSON.stringify(data));
+        return json(res,502,{error:'El Director AI no ha pogut respondre.'});
+      }
+      let answer='';
+      if(typeof data.output_text==='string')answer=data.output_text.trim();
+      if(!answer&&Array.isArray(data.output)){
+        for(const item of data.output){
+          for(const part of (item?.content||[])){
+            if(part?.type==='output_text'&&part?.text)answer+=part.text;
+          }
+        }
+      }
+      if(!answer)answer='No he pogut construir una resposta útil.';
+      return json(res,200,{answer,model:data.model||process.env.DIRECTOR_AI_MODEL||'gpt-6-luna'},'no-store');
     }
 
     if (u.pathname === '/api/finance/snapshot' && req.method === 'GET') {
