@@ -721,6 +721,8 @@ const RULES_OBJECTIVES_V5='barcaCareerDirectorRulesObjectivesV5';
 if(!localStorage.getItem(RULES_OBJECTIVES_V5)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);state.target=base.target;state.clubStatus=base.clubStatus;state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V5,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BARCA_FINANCE_V1='barcaCareerDirectorFinanceV1';
 if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=150.4;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+const BARCA_WAGE_BASELINE_V1='barcaCareerDirectorWageBaselineV1';
+if(!localStorage.getItem(BARCA_WAGE_BASELINE_V1)){state.finance=state.finance||{};state.finance.initialWeeklyWages=4800000;state.finance.wageBaselineSource='FAFIFA · FC Barcelona FC27 · 7 Oct 2026';localStorage.setItem(BARCA_WAGE_BASELINE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BUDGET_BASELINE_2026_FIX='barcaCareerDirectorBudgetBaseline2026V1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_FIX)){
   state.finance=state.finance||{};
@@ -978,18 +980,38 @@ function financialModel(){
   const transferIncome=ops.filter(t=>incomeTypes.has(t.type)).reduce((a,t)=>a+num(t.amount),0);
   const reinvestableIncome=transferIncome*.70;
   const available=openingOperational+reinvestableIncome-transferSpend;
-  const currentWages=(state.squad||[]).reduce((a,p)=>a+playerWageContribution(p),0);
+
   const baseline=state.finance?.initialWageByPlayer||{};
-  const initialWages=Object.values(baseline).reduce((a,v)=>a+num(v),0);
+  const mappedInitial=Object.values(baseline).reduce((a,v)=>a+num(v),0);
+  const initialWages=num(state.finance?.initialWeeklyWages)||mappedInitial||4800000;
+  const rawCurrentWages=(state.squad||[]).reduce((a,p)=>a+playerWageContribution(p),0);
+
+  // The FC27 ratings dataset has no wages for the imported Barça squad.
+  // Until individual wages are enriched, use the authoritative team aggregate
+  // (4.8 M€/week) and only layer known post-start wage movements on top.
+  const hasUsableInitialPlayerWages=mappedInitial>initialWages*.5;
+  const knownPostStartDelta=(state.squad||[]).reduce((sum,p)=>{
+    const now=playerWageContribution(p);
+    if(!(p.playerId in baseline)) return sum+now;
+    const before=num(baseline[p.playerId]);
+    if(before>0) return sum+(now-before);
+    return sum;
+  },0);
+  const currentWages=hasUsableInitialPlayerWages?rawCurrentWages:initialWages+knownPostStartDelta;
   const wageDelta=currentWages-initialWages;
   const wageGrowth=initialWages?wageDelta/initialWages:0;
-  const ownedWages=(state.squad||[]).filter(p=>p.ownership==='Propietat').reduce((a,p)=>a+playerWageContribution(p),0);
-  const incomingLoanWages=(state.squad||[]).filter(p=>p.ownership==='Cedit al Barça').reduce((a,p)=>a+playerWageContribution(p),0);
-  const outgoingLoanWages=(state.squad||[]).filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+playerWageContribution(p),0);
+
+  const ownedWages=hasUsableInitialPlayerWages
+    ?(state.squad||[]).filter(p=>p.ownership==='Propietat').reduce((a,p)=>a+playerWageContribution(p),0)
+    :initialWages+knownPostStartDelta;
+  const incomingLoanWages=hasUsableInitialPlayerWages?(state.squad||[]).filter(p=>p.ownership==='Cedit al Barça').reduce((a,p)=>a+playerWageContribution(p),0):0;
+  const outgoingLoanWages=hasUsableInitialPlayerWages?(state.squad||[]).filter(p=>p.ownership==='Cedit fora').reduce((a,p)=>a+playerWageContribution(p),0):0;
+
   const wageMovements=(state.squad||[]).map(p=>{
     const before=num(baseline[p.playerId]),now=playerWageContribution(p),delta=now-before;
     return {p,before,now,delta,newPlayer:!(p.playerId in baseline)};
-  }).filter(x=>Math.abs(x.delta)>0.01 || x.newPlayer);
+  }).filter(x=>x.newPlayer&&Math.abs(x.delta)>0.01 || (x.before>0&&Math.abs(x.delta)>0.01));
+
   return {initialBudget,openingOperational,transferSpend,transferIncome,reinvestableIncome,available,currentWages,initialWages,wageDelta,wageGrowth,ownedWages,incomingLoanWages,outgoingLoanWages,wageMovements};
 }
 function financeLedgerRows(){
