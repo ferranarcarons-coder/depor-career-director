@@ -1915,13 +1915,13 @@ async function sendDirectorChat(textOverride){
     try{natural=await directorConversationalReply(text)}catch(e){console.error('director conversational',e)}
     if(natural){
       const safe=natural.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
-      state.directorChat[i]={role:'ai',html:'<strong>Director esportiu</strong>'+safe};
+      state.directorChat[i]={role:'ai',html:'<span class="decision-tag good">GROQ AI</span><strong>Director esportiu</strong>'+safe};
     }else{
-      const a=await directorReply(text);
-      state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text};
+      state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">IA NO CONNECTADA</span><strong>Director esportiu</strong>Groq no està disponible ara mateix. Revisa la configuració del backend.'};
     }
   }catch(e){
-    state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'};
+    console.error('director ai failed',e);
+    state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR GROQ</span><strong>Director esportiu</strong>No he pogut connectar amb el Director AI. Torna-ho a provar en uns segons.'};
   }
   save();
 }
