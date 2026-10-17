@@ -437,7 +437,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 <div class="director-ai-layout"><article class="panel director-chat-panel"><div class="director-chat-head"><div><p class="eyebrow">LIVE DECISION ROOM</p><h2>Què vols fer al mercat?</h2></div><span class="status-pill"><span class="dot"></span> Context de la Career</span></div>
 <div class="director-quick-actions"><button type="button" data-director-prompt="Què faries amb aquesta plantilla segons la tàctica actual?">Analitza plantilla</button><button type="button" data-director-prompt="Busco un central realista per fitxar">Busco un central</button><button type="button" data-director-prompt="A qui vendries de la plantilla?">A qui vendries?</button><button type="button" data-director-prompt="A qui cediries de la plantilla?">A qui cediries?</button><button type="button" data-director-prompt="Quins jugadors de la plantilla no tocaria vendre?">Intocables</button></div>
 <div id="directorChatMessages" class="director-chat-messages"></div>
-<div class="director-chat-input"><textarea id="directorChatInput" rows="3" placeholder="Ex.: Vendries Yeremay per 18 M€? · Cedim aquest central? · És realista fitxar Bryan Gil? · Busco un lateral esquerre..."></textarea><button class="primary" id="directorChatSendBtn">Preguntar</button></div>
+<div class="director-chat-input"><textarea id="directorChatInput" rows="3" placeholder="Parla'm com ho faries amb el teu director esportiu: 'Què faries amb Fermín?', 'Ens cal un 9?', 'Vendries Raphinha per 120 M€?'..."></textarea><div style="display:flex;gap:8px;align-items:stretch"><button type="button" class="ghost-btn" id="directorMicBtn" title="Parlar amb el Director AI">🎙️ Parlar</button><button type="button" class="ghost-btn" id="directorVoiceToggleBtn" title="Activar/desactivar resposta per veu">🔊 Veu</button><button class="primary" id="directorChatSendBtn">Enviar</button></div></div>
 <p class="lab-note">El Director AI utilitza la teva plantilla, OVR Career, minuts, rols, contractes, salaris, Club Status, pressupost i normes actives. No registra cap operació automàticament.</p></article>
 <aside class="panel director-context-panel"><div class="panel-head"><div><p class="eyebrow">CONTEXT</p><h2>Projecte actual</h2></div><span>LIVE</span></div><div id="directorContextStats" class="director-context-stats"></div><div class="director-guidance"><strong>Em pots preguntar...</strong><p>• si un fitxatge és realista</p><p>• si acceptaria una oferta</p><p>• si vendria un jugador sense oferta</p><p>• si el cediria o me'l quedaria</p><p>• quines posicions reforçaria</p><p>• quins candidats són més realistes</p></div></aside></div></section>
 <section id="transfers" class="view">
@@ -1879,7 +1879,65 @@ async function directorReply(text){
  if(intent==='sell')return squadSellCandidates('sell');
  return {label:'DIRECTOR ESPORTIU',cls:'warn',text:'Digues-me la decisió que vols prendre o el perfil que busques. Puc prioritzar fitxatges, vendes, cessions, renovacions, rols i necessitats de plantilla amb el context actual del Barça.'};
 }
-async function sendDirectorChat(textOverride){const input=$('#directorChatInput');const text=String(textOverride||input?.value||'').trim();if(!text)return;state.directorChat=state.directorChat||[];state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});if(input)input.value='';renderTransferLab();state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Analitzant el context…'});renderTransferLab();const i=state.directorChat.length-1;try{const a=await directorReply(text);state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text}}catch(e){state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'}}save()}
+let directorVoiceEnabled=false;
+function stripHtmlText(v){const d=document.createElement('div');d.innerHTML=String(v||'');return d.textContent||d.innerText||''}
+function speakDirector(text){
+  if(!directorVoiceEnabled||!('speechSynthesis' in window))return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(String(text||''));
+    u.lang='ca-ES';u.rate=.98;u.pitch=.95;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function directorHistoryForApi(){
+  return (state.directorChat||[]).slice(-12).map(m=>({
+    role:m.role==='ai'?'assistant':'user',
+    content:stripHtmlText(m.html||'').replace(/^Director esportiu\s*/i,'').trim()
+  })).filter(x=>x.content);
+}
+async function directorConversationalReply(text){
+  const r=await fetch('/api/director/chat',{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({message:text,history:directorHistoryForApi()})
+  });
+  if(!r.ok){
+    const err=await r.json().catch(()=>({}));
+    if(err.code==='AI_NOT_CONFIGURED')return null;
+    throw new Error(err.error||'Director AI unavailable');
+  }
+  const d=await r.json();
+  return String(d.answer||'').trim();
+}
+async function sendDirectorChat(textOverride){
+  const input=$('#directorChatInput');
+  const text=String(textOverride||input?.value||'').trim();
+  if(!text)return;
+  state.directorChat=state.directorChat||[];
+  state.directorChat.push({role:'user',html:text.replace(/</g,'&lt;')});
+  if(input)input.value='';
+  renderTransferLab();
+  state.directorChat.push({role:'ai',html:'<strong>Director esportiu</strong>Estic mirant-ho…'});
+  renderTransferLab();
+  const i=state.directorChat.length-1;
+  try{
+    let natural=null;
+    try{natural=await directorConversationalReply(text)}catch(e){console.error('director conversational',e)}
+    if(natural){
+      const safe=natural.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
+      state.directorChat[i]={role:'ai',html:'<strong>Director esportiu</strong>'+safe};
+      speakDirector(natural);
+    }else{
+      const a=await directorReply(text);
+      state.directorChat[i]={role:'ai',html:'<span class="decision-tag '+a.cls+'">'+a.label+'</span><strong>Director esportiu</strong>'+a.text};
+      speakDirector(stripHtmlText(a.text));
+    }
+  }catch(e){
+    state.directorChat[i]={role:'ai',html:'<span class="decision-tag warn">ERROR</span><strong>Director esportiu</strong>No he pogut completar l’anàlisi.'};
+  }
+  save();
+}
 function playerCareerOvr(p){return num(p.currentOvr||p.ovr||p.baseOvr||0)}
 function playerBaseOvr(p){return num(p.baseOvr||p.ovr||p.currentOvr||0)}
 function ovrDelta(p){return playerCareerOvr(p)-playerBaseOvr(p)}
@@ -2345,6 +2403,29 @@ window.signTarget=i=>{
 };
 $('#directorChatSendBtn').onclick=()=>sendDirectorChat();
 $('#directorChatInput').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDirectorChat();}};
+const voiceToggle=$('#directorVoiceToggleBtn');
+if(voiceToggle)voiceToggle.onclick=()=>{
+  directorVoiceEnabled=!directorVoiceEnabled;
+  voiceToggle.textContent=directorVoiceEnabled?'🔊 Veu ON':'🔇 Veu OFF';
+};
+const micBtn=$('#directorMicBtn');
+if(micBtn){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){
+    micBtn.disabled=true;micBtn.title='El navegador no ofereix dictat de veu compatible.';
+  }else{
+    const rec=new SpeechRecognition();
+    rec.lang='ca-ES';rec.interimResults=false;rec.continuous=false;
+    rec.onstart=()=>{micBtn.textContent='🎙️ Escoltant…';micBtn.disabled=true};
+    rec.onend=()=>{micBtn.textContent='🎙️ Parlar';micBtn.disabled=false};
+    rec.onerror=()=>{micBtn.textContent='🎙️ Parlar';micBtn.disabled=false};
+    rec.onresult=e=>{
+      const spoken=String(e.results?.[0]?.[0]?.transcript||'').trim();
+      if(spoken){const input=$('#directorChatInput');if(input)input.value=spoken;sendDirectorChat(spoken);}
+    };
+    micBtn.onclick=()=>{try{rec.start()}catch(e){}};
+  }
+}
 $('[data-director-prompt]').forEach(b=>b.onclick=()=>sendDirectorChat(b.dataset.directorPrompt));
 $('#clearDirectorChatBtn').onclick=()=>{if(confirm('Netejar la conversa del Director AI?')){state.directorChat=[];save();}};
 
