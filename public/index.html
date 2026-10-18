@@ -747,7 +747,8 @@ let cloudSyncTimer=null;
 let cloudSyncEnabled=false;
 
 function normalizeLoadedSquad(list){
-  return (list||[]).map(p=>{
+  const normName=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const normalized=(list||[]).map(p=>{
     const baseOvr=num(p.baseOvr||p.ovr||p.currentOvr||0);
     const currentOvr=num(p.currentOvr||p.ovr||p.baseOvr||0);
     let purchaseOptionType=p.purchaseOptionType||'Sense opció';
@@ -757,11 +758,39 @@ function normalizeLoadedSquad(list){
       if(!/sense/i.test(legacy)){purchaseOptionType='Opció de compra';const m=legacy.replace(',','.').match(/(\d+(?:\.\d+)?)/);if(m)purchaseOptionValue=Number(m[1]);}
     }
     let contractYears=num(p.contractYears||0),loanYears=num(p.loanYears||0);
-    {
-      const ownership=(p.ownership==='Propietat'&&p.destinationClub)?'Cedit fora':(p.ownership||'Propietat');
-      return {...p,playerId:p.playerId||(globalThis.crypto?.randomUUID?crypto.randomUUID():('p-'+Date.now()+'-'+Math.random().toString(36).slice(2))),baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership,parentClub:p.parentClub||'',destinationClub:p.destinationClub||'',wageShareDepor:num(p.wageShareDepor||0),purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
+    const ownership=(p.ownership==='Propietat'&&p.destinationClub)?'Cedit fora':(p.ownership||'Propietat');
+    let out={...p,playerId:p.playerId||(globalThis.crypto?.randomUUID?crypto.randomUUID():('p-'+Date.now()+'-'+Math.random().toString(36).slice(2))),baseOvr,currentOvr,ovrUpdatedAt:p.ovrUpdatedAt||'',ownership,parentClub:p.parentClub||'',destinationClub:p.destinationClub||'',wageShareDepor:num(p.wageShareDepor||0),purchaseOptionType,purchaseOptionValue,contractYears,loanYears};
+    const name=normName(out.name);
+
+    if(name.includes('alejandro balde')){
+      out={...out,name:'Alejandro Balde Martínez',pos:'LI',alternatePositions:'MI',age:22,baseOvr:82,currentOvr:82,potential:85,value:33,wage:32000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:2,loanYears:0};
     }
+    if(name.includes('fermin lopez')){
+      out={...out,name:'Fermín López Marín',pos:'MCO',alternatePositions:'MC MI',age:23,baseOvr:85,currentOvr:85,potential:88,value:62,wage:180000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:5,loanYears:0};
+    }
+    if(name.includes('antonio fernandez')||name.includes('toni fernandez')){
+      out={...out,name:'Antonio Fernández Casino',pos:'ED',alternatePositions:'MD',age:17,baseOvr:65,currentOvr:65,potential:84,value:0.725,wage:17000,ownership:'Cedit fora',parentClub:'FC Barcelona',destinationClub:'Venezia FC',contractYears:0,loanYears:1};
+    }
+    return out;
+  }).filter(p=>{
+    const name=normName(p.name);
+    return !(name.includes('hector fort'));
   });
+
+  const seen=new Map();
+  for(const p of normalized){
+    let key=normName(p.name);
+    if(key.includes('fermin lopez'))key='fermin lopez';
+    if(key.includes('antonio fernandez')||key.includes('toni fernandez'))key='antonio fernandez';
+    if(key.includes('alejandro balde'))key='alejandro balde';
+    if(!seen.has(key))seen.set(key,p);
+    else{
+      const current=seen.get(key);
+      const prefer=(p.ownership==='Cedit fora'&&current.ownership!=='Cedit fora')||num(p.currentOvr)>num(current.currentOvr);
+      if(prefer)seen.set(key,p);
+    }
+  }
+  return [...seen.values()];
 }
 function mergeIncomingState(remote){
   if(!remote || typeof remote!=='object') return;
@@ -2456,7 +2485,7 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#lineupTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#enrichSquadBtn').onclick=()=>enrichSquadFromFc27();$('#analyzeSquadBtn').onclick=()=>renderSquadAnalysis(true);
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
-ensureSquadIds();const loanShareChanges=applyRealLifeLoanWageShares();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);if(loanShareChanges){localStorage.setItem(KEY,JSON.stringify(state));setTimeout(()=>syncDedicatedSquad(true),120);}
+state.squad=normalizeLoadedSquad(state.squad||[]);ensureSquadIds();const loanShareChanges=applyRealLifeLoanWageShares();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);if(loanShareChanges){localStorage.setItem(KEY,JSON.stringify(state));setTimeout(()=>syncDedicatedSquad(true),120);}
 nav();render();renderSquadTablesOnly();renderLineupEditor();setTimeout(()=>{renderSquadTablesOnly();renderLineupEditor();},50);
 const bootBanner=$('#squadHydrationStatus');
 if(bootBanner){
