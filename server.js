@@ -631,6 +631,105 @@ async function initDb() {
     }
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_LIVAKOVIC_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: wingers / forwards, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const forwardSnapshot=[
+      {id:'manual-fw-lamine',match:['lamine yamal','lamine yamal nasraoui ebana'],data:{
+        name:'Lamine Yamal Nasraoui Ebana',pos:'ED',alternatePositions:'MD',age:18,
+        baseOvr:90,currentOvr:90,potential:95,value:124.5,wage:401000,
+        role:'Clave',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-raphinha',match:['raphael dias belloli','raphinha'],data:{
+        name:'Raphael Dias Belloli',pos:'EI',alternatePositions:'ED MCO MI MD DC',age:29,
+        baseOvr:89,currentOvr:89,potential:90,value:101,wage:321000,
+        role:'Clave',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-anthony-gordon',match:['anthony michael gordon','anthony gordon'],data:{
+        name:'Anthony Michael Gordon',pos:'EI',alternatePositions:'DC MI',age:25,
+        baseOvr:82,currentOvr:82,potential:85,value:34,wage:231000,
+        role:'Importante',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-adeyemi',match:['karim david adeyemi','karim adeyemi'],data:{
+        name:'Karim-David Adeyemi',pos:'EI',alternatePositions:'ED MCO MI MD DC',age:24,
+        baseOvr:82,currentOvr:82,potential:85,value:35,wage:240000,
+        role:'Importante',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-gabriel-jesus',match:['gabriel fernando de jesus','gabriel jesus'],data:{
+        name:'Gabriel Fernando de Jesus',pos:'DC',alternatePositions:'MCO',age:29,
+        baseOvr:79,currentOvr:79,potential:84,value:17.5,wage:145000,
+        role:'Rotación',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-bisiwu',match:['jesse eugen bisiwu','jesse bisiwu'],data:{
+        name:'Jesse Eugen Bisiwu',pos:'EI',alternatePositions:'ED DC MI MD',age:18,
+        baseOvr:67,currentOvr:67,potential:85,value:1.1,wage:30000,
+        role:'Promesa',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-hamza',match:['hamza mohamed abdelkarim selim','hamza abdelkarim'],data:{
+        name:'Hamza Mohamed Abdelkarim Selim',pos:'DC',alternatePositions:'',age:18,
+        baseOvr:65,currentOvr:65,potential:84,value:0.775,wage:22000,
+        role:'Promesa',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-fw-bardghji',match:['roony bardghji'],data:{
+        name:'Roony Bardghji',pos:'ED',alternatePositions:'MD',age:20,
+        baseOvr:74,currentOvr:74,potential:85,value:4.8,wage:20000,
+        role:'Rotación',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-loan-antonio-fernandez',match:['antonio fernandez casino','antonio fernandez'],data:{
+        name:'Antonio Fernández Casino',pos:'ED',alternatePositions:'MD',age:17,
+        baseOvr:65,currentOvr:65,potential:84,value:0.725,wage:17000,
+        role:'Promesa',ownership:'Cedit fora',parentClub:'FC Barcelona',
+        destinationClub:'Venezia FC',contractYears:0,loanYears:1,
+        purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:0,wageShareManual:false,realClub:'Venezia FC'
+      }}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let inserted=0,updated=0;
+    for(const snap of forwardSnapshot){
+      const existing=rows.rows.find(r=>{
+        const n=normalizeSnapshotName(r.data?.name);
+        return snap.match.some(m=>n.includes(m));
+      });
+      const finalData={
+        ...(existing?.data||{}),...snap.data,
+        playerId:existing?.data?.playerId||snap.id,
+        ovrUpdatedAt:'18/10/2026',
+        manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'
+      };
+      if(existing){
+        await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+          [existing.player_id,JSON.stringify(finalData)]);
+        updated++;
+      }else{
+        await pool.query(
+          `INSERT INTO squad_players(player_id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          [snap.id,JSON.stringify(finalData)]
+        );
+        inserted++;
+      }
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_FW]',JSON.stringify({inserted,updated,total:forwardSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_FW_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
