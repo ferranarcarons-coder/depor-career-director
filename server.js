@@ -1449,7 +1449,8 @@ async function buildDirectorAiContext(){
     ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
     minutes:Number(p.minutes||0),goals:Number(p.goals||0),assists:Number(p.assists||0),
     contractYears:Number(p.contractYears||0),wage:Number(p.wage||0),value:Number(p.value||0),
-    ownership:p.ownership||'Propietat'
+    ownership:p.ownership||'Propietat',
+    contractRisk:p.contractRisk||''
   }));
 
   const expenseTypes=new Set(['Compra','Cessió entrada','Agent lliure']);
@@ -1589,6 +1590,8 @@ COM HAS DE DECIDIR
 - Per a joves, diferencia entre: quedar-se a rotació, cessió amb minuts garantits o venda. No assumeixis que "jove = cedir".
 - Per a veterans, diferencia entre rendiment immediat, salari, rol i risc de bloquejar minuts.
 - En renovacions, protegeix la jerarquia salarial i no premiïs automàticament qualsevol exigència.
+- En gestió contractual, diferencia urgència segons anys restants, edat i jerarquia: una peça important amb ≤1 any és prioritat de renovació o venda; un veterà o prescindible amb contracte curt pot justificar sortida o expiració.
+- Evita perdre valor de mercat per deixar arribar una peça important a l'últim any sense decisió.
 - En vendes, dona una decisió clara: vendre / escoltar ofertes / quedar-se / intocable. Si és possible, fixa una xifra mínima o rang.
 - En fitxatges, primer identifica si hi ha una necessitat real per posició; després defineix el perfil. Si l'usuari proposa un jugador concret, jutja l'encaix, no el prestigi.
 - En cessions, només recomana una sortida si el jugador no té un camí creïble de minuts i la cessió té sentit esportiu.
