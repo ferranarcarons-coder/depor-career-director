@@ -528,6 +528,69 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_MID]',JSON.stringify({inserted,updated,total:midfieldSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_MID_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: attacking/central midfielders, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const attackingMidSnapshot=[
+      {id:'manual-mid-pedri',match:['pedro gonzalez lopez','pedri'],data:{
+        name:'Pedro González López',pos:'MC',alternatePositions:'MCD MCO',age:23,
+        baseOvr:90,currentOvr:90,potential:93,value:136.5,wage:240000,
+        role:'Clave',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-mid-fermin',match:['fermin lopez','fermin lopez marin'],data:{
+        name:'Fermín López Marín',pos:'MCO',alternatePositions:'MC MI',age:23,
+        baseOvr:85,currentOvr:85,potential:88,value:62,wage:180000,
+        role:'Importante',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-mid-dani-olmo',match:['daniel olmo carvajal','dani olmo'],data:{
+        name:'Daniel Olmo Carvajal',pos:'MCO',alternatePositions:'MC MI EI',age:28,
+        baseOvr:84,currentOvr:84,potential:85,value:42.5,wage:240000,
+        role:'Importante',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-mid-gavi',match:['pablo martin paez gavira','gavi'],data:{
+        name:'Pablo Martín Páez Gavira',pos:'MC',alternatePositions:'MCD MI MCO EI',age:21,
+        baseOvr:82,currentOvr:82,potential:85,value:35.5,wage:180000,
+        role:'Importante',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let inserted=0,updated=0;
+    for(const snap of attackingMidSnapshot){
+      const existing=rows.rows.find(r=>{
+        const n=normalizeSnapshotName(r.data?.name);
+        return snap.match.some(m=>n.includes(m));
+      });
+      const finalData={
+        ...(existing?.data||{}),...snap.data,
+        playerId:existing?.data?.playerId||snap.id,
+        ovrUpdatedAt:'18/10/2026',
+        manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'
+      };
+      if(existing){
+        await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+          [existing.player_id,JSON.stringify(finalData)]);
+        updated++;
+      }else{
+        await pool.query(
+          `INSERT INTO squad_players(player_id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          [snap.id,JSON.stringify(finalData)]
+        );
+        inserted++;
+      }
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_AM]',JSON.stringify({inserted,updated,total:attackingMidSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_AM_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
