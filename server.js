@@ -366,6 +366,97 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_CB]',JSON.stringify({updated,total:centreBackSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_CB_ERROR]',e.message);}
 
+  // Ensure Barça-owned players currently loaned out exist in the squad table.
+  // The FC27 bootstrap only imports players whose current club is FC Barcelona,
+  // so loaned-out players must be added explicitly.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const loanedOutSnapshot=[
+      {
+        playerId:'manual-loan-ter-stegen',
+        match:['marc andre ter stegen','marc andre terstegen'],
+        data:{
+          name:'Marc-André ter Stegen',pos:'POR',alternatePositions:'',age:34,
+          baseOvr:82,currentOvr:82,potential:90,value:5,wage:321000,
+          role:'Importante',ownership:'Cedit fora',parentClub:'FC Barcelona',
+          destinationClub:'Ajax',loanYears:1,contractYears:0,
+          purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+          wageShareDepor:0,wageShareManual:false,
+          minutes:0,goals:0,assists:0,realClub:'Ajax'
+        }
+      },
+      {
+        playerId:'manual-loan-diego-kochen',
+        match:['diego kochen'],
+        data:{
+          name:'Diego Kochen',pos:'POR',alternatePositions:'',age:20,
+          baseOvr:62,currentOvr:62,potential:79,value:0.35,wage:8000,
+          role:'Promesa',ownership:'Cedit fora',parentClub:'FC Barcelona',
+          destinationClub:'Lyngby Boldklub',loanYears:1,contractYears:0,
+          purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+          wageShareDepor:0,wageShareManual:false,
+          minutes:0,goals:0,assists:0,realClub:'Lyngby Boldklub'
+        }
+      },
+      {
+        playerId:'manual-loan-aron-yaakobishvili',
+        match:['aron yaakobishvili'],
+        data:{
+          name:'Áron Yaakobishvili',pos:'POR',alternatePositions:'',age:20,
+          baseOvr:69,currentOvr:69,potential:85,value:1.2,wage:18000,
+          role:'Promesa',ownership:'Cedit fora',parentClub:'FC Barcelona',
+          destinationClub:'UD Almería',loanYears:1,contractYears:0,
+          purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+          wageShareDepor:0,wageShareManual:false,
+          minutes:0,goals:0,assists:0,realClub:'UD Almería'
+        }
+      },
+      {
+        playerId:'manual-loan-ronald-araujo',
+        match:['ronald araujo','ronald federico araujo da silva'],
+        data:{
+          name:'Ronald Araújo',pos:'DFC',alternatePositions:'LD',age:27,
+          baseOvr:80,currentOvr:80,potential:86,value:19.5,wage:130000,
+          role:'Importante',ownership:'Cedit fora',parentClub:'FC Barcelona',
+          destinationClub:'Liverpool FC',loanYears:1,contractYears:0,
+          purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+          wageShareDepor:0,wageShareManual:false,
+          minutes:0,goals:0,assists:0,realClub:'Liverpool FC'
+        }
+      }
+    ];
+
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let inserted=0,updated=0;
+    for(const snap of loanedOutSnapshot){
+      const existing=rows.rows.find(r=>{
+        const n=normalizeSnapshotName(r.data?.name);
+        return snap.match.some(m=>n.includes(m));
+      });
+      const finalData={
+        ...(existing?.data||{}),
+        ...snap.data,
+        playerId:existing?.data?.playerId||snap.playerId,
+        ovrUpdatedAt:'18/10/2026',
+        manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'
+      };
+      if(existing){
+        await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+          [existing.player_id,JSON.stringify(finalData)]);
+        updated++;
+      }else{
+        await pool.query(
+          `INSERT INTO squad_players(player_id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          [snap.playerId,JSON.stringify(finalData)]
+        );
+        inserted++;
+      }
+    }
+    console.log('[ENSURE_LOANED_OUT]',JSON.stringify({inserted,updated,total:loanedOutSnapshot.length}));
+  }catch(e){console.warn('[ENSURE_LOANED_OUT_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
