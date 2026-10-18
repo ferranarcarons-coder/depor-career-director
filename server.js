@@ -1618,13 +1618,17 @@ function sanitizeBarcaSquad(list){
     const n=norm(p.name);
 
     // Players confirmed by the user as no longer at Barça.
-    if(n.includes('hector fort') || n.includes('alvaro cortes') || n.includes('guille fernandez') || n.includes('guillermo fernandez')) continue;
+    // Hector Fort can arrive with mojibake/corrupted accents, so match surname + profile too.
+    const isHectorFort=(n.includes('hector')&&n.includes('fort')) || (n.includes('fort') && String(p.pos||'').toUpperCase()==='LD' && Number(p.age||0)===20);
+    if(isHectorFort || n.includes('alvaro cortes') || n.includes('guille fernandez') || n.includes('guillermo fernandez')) continue;
 
-    // Force the user-confirmed FC27 data.
-    if(n.includes('alejandro balde')){
+    // Force the user-confirmed FC27 data. Match both full names and legacy short aliases.
+    const isBalde=n==='balde' || n.includes('alejandro balde');
+    const isFermin=n==='fermin' || n.includes('fermin lopez');
+    if(isBalde){
       p={...p,name:'Alejandro Balde Martínez',pos:'LI',alternatePositions:'MI',age:22,baseOvr:82,currentOvr:82,potential:85,value:33,wage:32000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:2,loanYears:0};
     }
-    if(n.includes('fermin lopez')){
+    if(isFermin){
       p={...p,name:'Fermín López Marín',pos:'MCO',alternatePositions:'MC MI',age:23,baseOvr:85,currentOvr:85,potential:88,value:62,wage:180000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:5,loanYears:0};
     }
     if(n.includes('antonio fernandez') || n.includes('toni fernandez')){
@@ -1633,8 +1637,8 @@ function sanitizeBarcaSquad(list){
 
     // Canonical keys for dedupe.
     let key=norm(p.name);
-    if(key.includes('fermin lopez')) key='fermin lopez';
-    else if(key.includes('alejandro balde')) key='alejandro balde';
+    if(key==='fermin' || key.includes('fermin lopez')) key='fermin lopez';
+    else if(key==='balde' || key.includes('alejandro balde')) key='alejandro balde';
     else if(key.includes('antonio fernandez')||key.includes('toni fernandez')) key='antonio fernandez';
 
     if(seen.has(key)) continue;
