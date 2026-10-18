@@ -745,6 +745,125 @@ async function initDb() {
     console.log('[REMOVE_NON_BARCA_PLAYERS]',JSON.stringify({removed:ids.length,names:removeNames}));
   }catch(e){console.warn('[REMOVE_NON_BARCA_PLAYERS_ERROR]',e.message);}
 
+  // Manual cleanup after user review: Balde data, Fermin duplicate, Hector Fort removal,
+  // and keep only the Venezia loan record for Antonio/Toni Fernandez.
+  try{
+    const normalizeName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    let rows=(await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at DESC')).rows;
+
+    // 1) Force-correct Alejandro Balde with the user-provided FC27 snapshot.
+    const baldeMatches=rows.filter(r=>{
+      const n=normalizeName(r.data?.name);
+      return n.includes('alejandro balde');
+    });
+    const baldeData={
+      name:'Alejandro Balde Martínez',pos:'LI',alternatePositions:'MI',age:22,
+      baseOvr:82,currentOvr:82,potential:85,value:33,wage:32000,
+      ownership:'Propietat',parentClub:'',destinationClub:'',
+      contractYears:2,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+      wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona',
+      ovrUpdatedAt:'18/10/2026',
+      manualSnapshotSource:'SoFIFA FC27 · user screenshot · 18/10/2026'
+    };
+    if(baldeMatches.length){
+      const keep=baldeMatches[0];
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+        [keep.player_id,JSON.stringify({...keep.data,...baldeData,playerId:keep.data?.playerId||keep.player_id})]);
+      if(baldeMatches.length>1){
+        const extra=baldeMatches.slice(1).map(x=>x.player_id);
+        await pool.query('DELETE FROM squad_players WHERE player_id = ANY($1::text[])',[extra]);
+      }
+    }else{
+      await pool.query(
+        `INSERT INTO squad_players(player_id,data,updated_at) VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+        ['manual-def-balde',JSON.stringify({...baldeData,playerId:'manual-def-balde'})]
+      );
+    }
+
+    // Refresh rows after Balde changes.
+    rows=(await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at DESC')).rows;
+
+    // 2) Deduplicate Fermin Lopez, keeping the most complete/current record and forcing correct data.
+    const ferminMatches=rows.filter(r=>{
+      const n=normalizeName(r.data?.name);
+      return n.includes('fermin lopez');
+    });
+    const ferminData={
+      name:'Fermín López Marín',pos:'MCO',alternatePositions:'MC MI',age:23,
+      baseOvr:85,currentOvr:85,potential:88,value:62,wage:180000,
+      ownership:'Propietat',parentClub:'',destinationClub:'',
+      contractYears:5,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+      wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona',
+      ovrUpdatedAt:'18/10/2026',
+      manualSnapshotSource:'SoFIFA FC27 · user screenshot · 18/10/2026'
+    };
+    if(ferminMatches.length){
+      const keep=ferminMatches[0];
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+        [keep.player_id,JSON.stringify({...keep.data,...ferminData,playerId:keep.data?.playerId||keep.player_id})]);
+      if(ferminMatches.length>1){
+        const extra=ferminMatches.slice(1).map(x=>x.player_id);
+        await pool.query('DELETE FROM squad_players WHERE player_id = ANY($1::text[])',[extra]);
+      }
+    }else{
+      await pool.query(
+        `INSERT INTO squad_players(player_id,data,updated_at) VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+        ['manual-mid-fermin',JSON.stringify({...ferminData,playerId:'manual-mid-fermin'})]
+      );
+    }
+
+    // 3) Remove Hector Fort completely: no longer part of FC Barcelona.
+    rows=(await pool.query('SELECT player_id,data FROM squad_players')).rows;
+    const hectorIds=rows.filter(r=>{
+      const n=normalizeName(r.data?.name);
+      return n.includes('hector fort') || n.includes('hector fort garcia');
+    }).map(r=>r.player_id);
+    if(hectorIds.length){
+      await pool.query('DELETE FROM squad_players WHERE player_id = ANY($1::text[])',[hectorIds]);
+    }
+
+    // 4) Antonio/Toni Fernandez: keep only one loaned-out Venezia record.
+    rows=(await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at DESC')).rows;
+    const antonioMatches=rows.filter(r=>{
+      const n=normalizeName(r.data?.name);
+      return n.includes('antonio fernandez') || n.includes('toni fernandez');
+    });
+    const antonioData={
+      name:'Antonio Fernández Casino',pos:'ED',alternatePositions:'MD',age:17,
+      baseOvr:65,currentOvr:65,potential:84,value:0.725,wage:17000,
+      role:'Promesa',ownership:'Cedit fora',parentClub:'FC Barcelona',
+      destinationClub:'Venezia FC',contractYears:0,loanYears:1,
+      purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+      wageShareDepor:0,wageShareManual:false,realClub:'Venezia FC',
+      ovrUpdatedAt:'18/10/2026',
+      manualSnapshotSource:'SoFIFA FC27 · user screenshot · 18/10/2026'
+    };
+    if(antonioMatches.length){
+      const preferred=antonioMatches.find(x=>x.data?.ownership==='Cedit fora'||String(x.data?.destinationClub||'').trim())||antonioMatches[0];
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+        [preferred.player_id,JSON.stringify({...preferred.data,...antonioData,playerId:preferred.data?.playerId||preferred.player_id})]);
+      const extra=antonioMatches.filter(x=>x.player_id!==preferred.player_id).map(x=>x.player_id);
+      if(extra.length){
+        await pool.query('DELETE FROM squad_players WHERE player_id = ANY($1::text[])',[extra]);
+      }
+    }else{
+      await pool.query(
+        `INSERT INTO squad_players(player_id,data,updated_at) VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+        ['manual-loan-antonio-fernandez',JSON.stringify({...antonioData,playerId:'manual-loan-antonio-fernandez'})]
+      );
+    }
+
+    console.log('[USER_SQUAD_CLEANUP]',JSON.stringify({
+      balde:true,
+      ferminDuplicatesRemoved:Math.max(0,ferminMatches.length-1),
+      hectorFortRemoved:hectorIds.length,
+      antonioDuplicatesRemoved:Math.max(0,antonioMatches.length-1)
+    }));
+  }catch(e){console.warn('[USER_SQUAD_CLEANUP_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
