@@ -864,6 +864,29 @@ async function initDb() {
     }));
   }catch(e){console.warn('[USER_SQUAD_CLEANUP_ERROR]',e.message);}
 
+  try{
+    const rows=await pool.query('SELECT player_id,data FROM squad_players ORDER BY updated_at ASC, player_id ASC');
+    const sanitized=sanitizeBarcaSquad(rows.rows.map(r=>r.data));
+    const ids=sanitized.map(p=>p.playerId).filter(Boolean);
+    await pool.query('BEGIN');
+    try{
+      for(const p of sanitized){
+        await pool.query(
+          `INSERT INTO squad_players(player_id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          [p.playerId,JSON.stringify(p)]
+        );
+      }
+      if(ids.length) await pool.query('DELETE FROM squad_players WHERE NOT (player_id = ANY($1::text[]))',[ids]);
+      await pool.query('COMMIT');
+      console.log('[SANITIZE_SQUAD_FINAL]',JSON.stringify({count:sanitized.length}));
+    }catch(e){
+      await pool.query('ROLLBACK');
+      throw e;
+    }
+  }catch(e){console.warn('[SANITIZE_SQUAD_FINAL_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
@@ -1585,10 +1608,46 @@ FORMAT
 CONTEXT ACTUAL DE LA CARRERA:
 ${JSON.stringify(context)}`;
 }
+function sanitizeBarcaSquad(list){
+  const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const out=[];
+  const seen=new Set();
+
+  for(const raw of (list||[])){
+    let p={...raw};
+    const n=norm(p.name);
+
+    // Players confirmed by the user as no longer at Barça.
+    if(n.includes('hector fort') || n.includes('alvaro cortes') || n.includes('guille fernandez') || n.includes('guillermo fernandez')) continue;
+
+    // Force the user-confirmed FC27 data.
+    if(n.includes('alejandro balde')){
+      p={...p,name:'Alejandro Balde Martínez',pos:'LI',alternatePositions:'MI',age:22,baseOvr:82,currentOvr:82,potential:85,value:33,wage:32000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:2,loanYears:0};
+    }
+    if(n.includes('fermin lopez')){
+      p={...p,name:'Fermín López Marín',pos:'MCO',alternatePositions:'MC MI',age:23,baseOvr:85,currentOvr:85,potential:88,value:62,wage:180000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:5,loanYears:0};
+    }
+    if(n.includes('antonio fernandez') || n.includes('toni fernandez')){
+      p={...p,name:'Antonio Fernández Casino',pos:'ED',alternatePositions:'MD',age:17,baseOvr:65,currentOvr:65,potential:84,value:0.725,wage:17000,ownership:'Cedit fora',parentClub:'FC Barcelona',destinationClub:'Venezia FC',contractYears:0,loanYears:1};
+    }
+
+    // Canonical keys for dedupe.
+    let key=norm(p.name);
+    if(key.includes('fermin lopez')) key='fermin lopez';
+    else if(key.includes('alejandro balde')) key='alejandro balde';
+    else if(key.includes('antonio fernandez')||key.includes('toni fernandez')) key='antonio fernandez';
+
+    if(seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
 async function readDedicatedSquad(){
   if(!dbReady) return [];
   const r=await pool.query('SELECT data FROM squad_players ORDER BY updated_at ASC, player_id ASC');
-  return r.rows.map(x=>x.data);
+  return sanitizeBarcaSquad(r.rows.map(x=>x.data));
 }
 
 function escHtml(v='') {
@@ -1800,7 +1859,7 @@ const server = http.createServer(async (req, res) => {
       if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
       const body=await readBody(req);
       if(!body || !Array.isArray(body.squad)) return json(res,400,{error:'Plantilla no vàlida.'});
-      const incoming=body.squad.map(raw=>({...raw,playerId:raw.playerId||crypto.randomUUID()}));
+      const incoming=sanitizeBarcaSquad(body.squad.map(raw=>({...raw,playerId:raw.playerId||crypto.randomUUID()})));
       const current=await pool.query('SELECT COUNT(*)::int AS n FROM squad_players');
       if(Number(current.rows[0]?.n||0)>0 && incoming.length===0){
         return json(res,409,{error:'Protecció activa: una plantilla existent no es pot buidar amb una sincronització.'});
