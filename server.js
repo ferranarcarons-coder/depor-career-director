@@ -2144,8 +2144,9 @@ const server = http.createServer(async (req, res) => {
         body:JSON.stringify({
           model:process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b',
           messages:[{role:'system',content:directorPrompt(context)},...input],
-          temperature:0.65,
-          max_completion_tokens:700
+          temperature:0.55,
+          reasoning_effort:'low',
+          max_completion_tokens:1400
         })
       });
 
@@ -2158,11 +2159,23 @@ const server = http.createServer(async (req, res) => {
         }));
         return json(res,502,{error:'El Director AI no ha pogut respondre.'});
       }
+      const msg=data?.choices?.[0]?.message||{};
+      const answer=String(msg.content||'').trim();
       console.log('[DIRECTOR_AI_OK]',JSON.stringify({
         model:data.model||process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b',
-        chars:String(data?.choices?.[0]?.message?.content||'').length
+        chars:answer.length,
+        finishReason:data?.choices?.[0]?.finish_reason||'',
+        reasoningChars:String(msg.reasoning||'').length,
+        completionTokens:data?.usage?.completion_tokens||0
       }));
-      const answer=String(data?.choices?.[0]?.message?.content||'').trim()||'No he pogut construir una resposta útil.';
+      if(!answer){
+        console.error('[DIRECTOR_AI_EMPTY]',JSON.stringify({
+          finishReason:data?.choices?.[0]?.finish_reason||'',
+          completionTokens:data?.usage?.completion_tokens||0,
+          reasoningChars:String(msg.reasoning||'').length
+        }));
+        return json(res,502,{error:'El Director AI ha retornat una resposta buida. Torna-ho a provar.',code:'AI_EMPTY_RESPONSE'});
+      }
       return json(res,200,{answer,model:data.model||process.env.DIRECTOR_AI_MODEL||'openai/gpt-oss-120b'},'no-store');
     }
 
