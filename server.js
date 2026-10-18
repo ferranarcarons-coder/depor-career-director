@@ -813,7 +813,7 @@ async function buildDirectorAiContext(){
   const lineup=state.lineup||{starters:{},bench:[]};
 
   const players=squad.map(p=>({
-    name:p.name,pos:p.pos,age:Number(p.age||0),role:p.role||'',
+    name:p.name,pos:positionEs(p.pos),age:Number(p.age||0),role:p.role||'',
     ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
     minutes:Number(p.minutes||0),goals:Number(p.goals||0),assists:Number(p.assists||0),
     contractYears:Number(p.contractYears||0),wage:Number(p.wage||0),value:Number(p.value||0),
@@ -837,13 +837,13 @@ async function buildDirectorAiContext(){
     .filter(p=>keyRoles.has(String(p.role||''))||p.ovr>=84)
     .sort((a,b)=>b.ovr-a.ovr)
     .slice(0,12)
-    .map(p=>({name:p.name,pos:p.pos,ovr:p.ovr,role:p.role,minutes:p.minutes}));
+    .map(p=>({name:p.name,pos:positionEs(p.pos),ovr:p.ovr,role:p.role,minutes:p.minutes}));
 
   const youngPlayers=players
     .filter(p=>p.age>0&&p.age<=21)
     .sort((a,b)=>b.ovr-a.ovr)
     .slice(0,10)
-    .map(p=>({name:p.name,pos:p.pos,age:p.age,ovr:p.ovr,role:p.role,minutes:p.minutes}));
+    .map(p=>({name:p.name,pos:positionEs(p.pos),age:p.age,ovr:p.ovr,role:p.role,minutes:p.minutes}));
 
   const formationMap={
     '4-3-3':['GK','LB','CB','CB','RB','CM','CM','CAM','RW','LW','ST'],
@@ -868,16 +868,16 @@ async function buildDirectorAiContext(){
   const startingXI=slotKeys.map((key,i)=>{
     const p=playerById.get(lineup.starters?.[key]);
     return p?{
-      slot:slots[i],name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+      slot:positionEs(slots[i]),name:p.name,pos:positionEs(p.pos),ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
       role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
-    }:{slot:slots[i],name:null};
+    }:{slot:positionEs(slots[i]),name:null};
   });
   const benchPlayers=(lineup.bench||[]).map(id=>playerById.get(id)).filter(Boolean).map(p=>({
-    name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+    name:p.name,pos:positionEs(p.pos),ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
     role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
   }));
   const outsideRotation=squad.filter(p=>!starterIds.has(p.playerId)&&!benchIds.has(p.playerId)).map(p=>({
-    name:p.name,pos:p.pos,ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+    name:p.name,pos:positionEs(p.pos),ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
     role:p.role||'',age:Number(p.age||0),minutes:Number(p.minutes||0)
   }));
   const lineupDefined=startingXI.filter(x=>x.name).length;
@@ -933,6 +933,7 @@ function directorPrompt(context){
 
 PERSONALITAT I CRITERI
 - Parla sempre en català, de forma natural, directa i professional.
+- Les posicions s'han d'anomenar sempre amb les abreviatures del joc en espanyol: POR, LD, DFC, LI, CAD, CAI, MCD, MC, MCO, MD, MI, ED, EI, SD i DC. No utilitzis GK, RB, CB, LB, CDM, CM, CAM, RM, LM, RW, LW, CF o ST en les respostes.
 - Actua com un director esportiu experimentat en una reunió interna, no com un chatbot.
 - Pren partit. Si una idea de l'usuari és dolenta, digues-ho clarament i proposa una alternativa millor.
 - Evita respostes neutres del tipus "depèn" quan hi ha prou informació per decidir.
@@ -982,6 +983,13 @@ function escHtml(v='') {
   return String(v??'').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 function n(v){const x=Number(v||0);return Number.isFinite(x)?x:0}
+function positionEs(pos){
+  const key=String(pos||'').trim().toUpperCase().replace(/\s+/g,'');
+  const map={GK:'POR',POR:'POR',RB:'LD',LD:'LD',RWB:'CAD',CAD:'CAD',LB:'LI',LI:'LI',LWB:'CAI',CAI:'CAI',
+    CB:'DFC',DFC:'DFC',CDM:'MCD',MCD:'MCD',CM:'MC',MC:'MC',CAM:'MCO',MCO:'MCO',
+    RM:'MD',MD:'MD',LM:'MI',MI:'MI',RW:'ED',ED:'ED',LW:'EI',EI:'EI',CF:'SD',SD:'SD',ST:'DC',DC:'DC'};
+  return map[key]||pos||'—';
+}
 function serverPlayerRow(p,i){
   const own=p.ownership||'Propietat';
   const base=n(p.baseOvr||p.ovr||p.currentOvr);
@@ -993,12 +1001,12 @@ function serverPlayerRow(p,i){
     ? (n(p.loanYears)?n(p.loanYears)+' anys':'Pendent')
     : (n(p.contractYears)?n(p.contractYears)+' anys':'Pendent');
   const link=own==='Cedit al Barça'?'CESSIÓ ENTRANT':'PROPI';
-  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.role||'—')+'</td><td>'+escHtml(link)+'</td><td>'+escHtml(duration)+'</td><td>'+(base||'—')+'</td><td><strong>'+(cur||'—')+'</strong></td><td>'+(delta>0?'+':'')+delta+'</td><td>'+escHtml(p.ovrUpdatedAt||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+(own==='Cedit al Barça'?'—':escHtml(duration))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button></td></tr>';
+  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(positionEs(p.pos))+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.role||'—')+'</td><td>'+escHtml(link)+'</td><td>'+escHtml(duration)+'</td><td>'+(base||'—')+'</td><td><strong>'+(cur||'—')+'</strong></td><td>'+(delta>0?'+':'')+delta+'</td><td>'+escHtml(p.ovrUpdatedAt||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+(own==='Cedit al Barça'?'—':escHtml(duration))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button></td></tr>';
 }
 function serverLoanRow(p,i){
   const cur=n(p.currentOvr||p.ovr||p.baseOvr);
   const value=n(p.value),wage=n(p.wage)/1000;
-  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(p.pos||'—')+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.destinationClub||'—')+'</td><td>'+(n(p.loanYears)?n(p.loanYears)+' anys':'—')+'</td><td>'+(cur||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+n(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?n(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button></td></tr>';
+  return '<tr data-server-row="1"><td><strong>'+escHtml(p.name||'')+'</strong></td><td>'+escHtml(positionEs(p.pos))+'</td><td>'+escHtml(p.age||'—')+'</td><td>'+escHtml(p.destinationClub||'—')+'</td><td>'+(n(p.loanYears)?n(p.loanYears)+' anys':'—')+'</td><td>'+(cur||'—')+'</td><td>'+value+'</td><td>'+wage+'</td><td>'+n(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?n(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button></td></tr>';
 }
 async function serveIndex(res) {
   try {
