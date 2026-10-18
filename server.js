@@ -18,8 +18,8 @@ const CLUB_CONFIG = {
   name:'FC Barcelona',
   shortName:'Barça',
   datasetClub:'FC Barcelona',
-  initialBudget:150.4,
-  budgetSource:'FC 27 update 4 · 7 Oct 2026',
+  initialBudget:163.5,
+  budgetSource:'FC 27 · pressupost inicial Barça 2026/27',
   clubStatus:9.2,
   target:'Guanyar LaLiga',
   projectStage:'Fase 1 · Competir per tots els títols'
