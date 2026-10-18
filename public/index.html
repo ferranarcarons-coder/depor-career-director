@@ -2699,6 +2699,34 @@ setTimeout(()=>cloudLoad(),50);
     const stored=n(p.wageShareDepor); if(stored>0)return stored;
     return p.ownership==='Cedit al Barça'?100:0;
   };
+  async function deleteVisibleSquadPlayer(playerId,name){
+    if(!playerId)return;
+    if(!confirm('Eliminar '+(name||'aquest jugador')+' de la plantilla?'))return;
+    try{
+      const r=await fetch('/api/squad/'+encodeURIComponent(playerId),{method:'DELETE'});
+      if(!r.ok){
+        const msg=await r.text();
+        alert('No s’ha pogut eliminar el jugador. '+msg);
+        return;
+      }
+      try{
+        const raw=localStorage.getItem(KEY);
+        if(raw){
+          const st=JSON.parse(raw);
+          if(Array.isArray(st.squad)){
+            st.squad=st.squad.filter(p=>p.playerId!==playerId);
+            localStorage.setItem(KEY,JSON.stringify(st));
+          }
+        }
+      }catch(e){}
+      try{
+        if(Array.isArray(state?.squad)) state.squad=state.squad.filter(p=>p.playerId!==playerId);
+      }catch(e){}
+      await renderVisibleSquad();
+    }catch(e){
+      alert('Error eliminant el jugador.');
+    }
+  }
   async function renderVisibleSquad(){
     const activeBody=document.getElementById('squadTable');
     const loanBody=document.getElementById('loanedOutTable');
@@ -2748,7 +2776,7 @@ setTimeout(()=>cloudLoad(),50);
           '<td>'+wage(p.wage)+'</td>'+
           '<td>'+share(p)+'%</td>'+
           '<td>'+(p.ownership==='Cedit al Barça'?'—':duration)+'</td>'+
-          '<td></td>'+
+          '<td><button class="ghost-btn" onclick="deleteVisibleSquadPlayer(\''+esc(String(p.playerId||''))+'\',\''+esc(String(p.name||'Jugador')).replace(/'/g,'&#39;')+'\')">Eliminar</button></td>'+
         '</tr>';
       }).join('');
       loanBody.innerHTML=loans.length?loans.map(p=>'<tr>'+
@@ -2762,7 +2790,7 @@ setTimeout(()=>cloudLoad(),50);
         '<td>'+wage(p.wage)+'</td>'+
         '<td>'+share(p)+'%</td>'+
         '<td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?value(p.purchaseOptionValue)+' M€':'—')+'</td>'+
-        '<td></td>'+
+        '<td><button class="ghost-btn" onclick="deleteVisibleSquadPlayer(\''+esc(String(p.playerId||''))+'\',\''+esc(String(p.name||'Jugador')).replace(/'/g,'&#39;')+'\')">Eliminar</button></td>'+
       '</tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
       const count=document.getElementById('loanedOutCount');if(count)count.textContent=loans.length+' JUGADOR'+(loans.length===1?'':'S');
       const banner=document.getElementById('squadHydrationStatus');
