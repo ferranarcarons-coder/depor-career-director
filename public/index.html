@@ -667,7 +667,7 @@ const DEFAULT_RULES=[
 ['Prestigi','El Barça pot aspirar als millors jugadors del món. El realisme no és fitxar poc, sinó fitxar amb sentit.','Prestigi'],
 ['Regla d’or','No reiniciem partits, no manipulem resultats i acceptem conseqüències esportives i econòmiques.','Governança']
 ];
-const base={directorChat:[],season:'2026/27',position:'—',target:'Guanyar LaLiga',clubStatus:9.2,projectStage:'Fase 1 · Competir per tots els títols',tactic:'4-3-3',lineup:{starters:{},bench:[]},points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:150.4,initialWageByPlayer:{},baselineLocked:false,budgetSource:'EA available transfer budget'},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
+const base={directorChat:[],season:'2026/27',position:'—',target:'Guanyar LaLiga',clubStatus:9.2,projectStage:'Fase 1 · Competir per tots els títols',tactic:'4-3-3',lineup:{starters:{},bench:[]},points:0,matches:[],nextMatch:{opponent:'',competition:'',date:'',venue:'Casa'},standings:[],decisions:[],reviews:[],setup:{squad:false,finances:false,board:false,hierarchy:false,needs:false,rules:true},shortlist:[],latestAssessment:null,finance:{initialBudget:163.5,initialWageByPlayer:{},baselineLocked:false,budgetSource:'EA available transfer budget'},squad:[],transfers:[],youth:[],history:[],objectives:structuredClone(DEFAULT_OBJECTIVES),rules:structuredClone(DEFAULT_RULES)}
 const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
 const serverBootState=window.__SERVER_STATE__&&typeof window.__SERVER_STATE__==='object'?window.__SERVER_STATE__:null;
 let state;
@@ -720,13 +720,13 @@ if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(
 const RULES_OBJECTIVES_V5='barcaCareerDirectorRulesObjectivesV5';
 if(!localStorage.getItem(RULES_OBJECTIVES_V5)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);state.target=base.target;state.clubStatus=base.clubStatus;state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V5,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BARCA_FINANCE_V1='barcaCareerDirectorFinanceV1';
-if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=150.4;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=163.5;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BARCA_WAGE_BASELINE_V1='barcaCareerDirectorWageBaselineV1';
 if(!localStorage.getItem(BARCA_WAGE_BASELINE_V1)){state.finance=state.finance||{};state.finance.initialWeeklyWages=4800000;state.finance.wageBaselineSource='FAFIFA · FC Barcelona FC27 · 7 Oct 2026';localStorage.setItem(BARCA_WAGE_BASELINE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
 const BUDGET_BASELINE_2026_FIX='barcaCareerDirectorBudgetBaseline2026V1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_FIX)){
   state.finance=state.finance||{};
-  state.finance.initialBudget=150.4;
+  state.finance.initialBudget=163.5;
   state.finance.budgetSource='EA available transfer budget';
   localStorage.setItem(BUDGET_BASELINE_2026_FIX,'1');
   localStorage.setItem(KEY,JSON.stringify(state));
@@ -734,7 +734,7 @@ if(!localStorage.getItem(BUDGET_BASELINE_2026_FIX)){
 const BUDGET_BASELINE_2026_STAFF_FIX='barcaCareerDirectorBudgetBaseline2026StaffV1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_STAFF_FIX)){
   state.finance=state.finance||{};
-  state.finance.initialBudget=150.4;
+  state.finance.initialBudget=163.5;
   state.finance.budgetSource='EA available transfer budget after staff changes';
   localStorage.setItem(BUDGET_BASELINE_2026_STAFF_FIX,'1');
   localStorage.setItem(KEY,JSON.stringify(state));
@@ -971,7 +971,7 @@ function ensureFinanceBaseline(){
 }
 function financialModel(){
   ensureFinanceBaseline();
-  const initialBudget=state.season==='2026/27'?150.4:num(state.finance?.initialBudget);
+  const initialBudget=state.season==='2026/27'?163.5:num(state.finance?.initialBudget);
   const openingOperational=initialBudget;
   const ops=state.transfers||[];
   const expenseTypes=new Set(['Compra','Cessió entrada','Agent lliure']);
