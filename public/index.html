@@ -2693,8 +2693,9 @@ setTimeout(()=>cloudLoad(),50);
         if(typeof av==='number'&&typeof bv==='number')return (av-bv)*sort.dir;
         return String(av).localeCompare(String(bv),'ca',{numeric:true,sensitivity:'base'})*sort.dir;
       });
-      const active=sortList(squad.filter(p=>p.ownership!=='Cedit fora'),activeSort);
-      const loans=sortList(squad.filter(p=>p.ownership==='Cedit fora'),loanSort);
+      const isOut=p=>p?.ownership==='Cedit fora'||Boolean(String(p?.destinationClub||'').trim());
+      const active=sortList(squad.filter(p=>!isOut(p)),activeSort);
+      const loans=sortList(squad.filter(p=>isOut(p)),loanSort);
       activeBody.innerHTML=active.map((p,i)=>{
         const delta=n(p.currentOvr||p.ovr||p.baseOvr)-n(p.baseOvr||p.ovr||p.currentOvr);
         const duration=p.ownership==='Cedit al Barça'
