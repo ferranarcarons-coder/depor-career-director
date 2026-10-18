@@ -283,6 +283,50 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_GK]',JSON.stringify({updated,total:goalkeeperSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_GK_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: full-backs / defenders, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const defenderSnapshot=[
+      {match:['eric garcia','eric garcia martret'],patch:{
+        pos:'DFC',alternatePositions:'LD MCD MC',age:25,baseOvr:85,currentOvr:85,potential:86,
+        value:52,wage:154000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:5,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['joao cancelo','joao pedro cavaco cancelo'],patch:{
+        pos:'LI',alternatePositions:'LD MD MI',age:32,baseOvr:83,currentOvr:83,potential:88,
+        value:25,wage:339000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['jules kounde','jules olivier kounde'],patch:{
+        pos:'LD',alternatePositions:'DFC MD',age:27,baseOvr:85,currentOvr:85,potential:87,
+        value:52,wage:301000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['xavi espart','xavi espart font'],patch:{
+        pos:'LD',alternatePositions:'LI MC',age:19,baseOvr:71,currentOvr:71,potential:85,
+        value:1.9,wage:44000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['alejandro balde','alejandro balde martinez'],patch:{
+        pos:'LI',alternatePositions:'MI',age:22,baseOvr:82,currentOvr:82,potential:85,
+        value:33,wage:32000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,realClub:'FC Barcelona'
+      }}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let updated=0;
+    for(const row of rows.rows){
+      const current=row.data||{};
+      const name=normalizeSnapshotName(current.name);
+      const snap=defenderSnapshot.find(x=>x.match.some(m=>name.includes(m)));
+      if(!snap)continue;
+      const next={...current,...snap.patch,ovrUpdatedAt:'18/10/2026',manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'};
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',[row.player_id,JSON.stringify(next)]);
+      updated++;
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_DEF]',JSON.stringify({updated,total:defenderSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_DEF_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
