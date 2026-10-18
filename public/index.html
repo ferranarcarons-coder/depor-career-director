@@ -190,6 +190,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 .exec-plan{display:grid;gap:8px;padding:12px}
 .exec-plan-item{display:grid;grid-template-columns:28px 1fr;gap:9px;align-items:start;padding:9px;border:1px solid #edf1f5;border-radius:10px;background:#fafcff}
 .exec-plan-item strong{font-size:10px}.exec-plan-item p{margin:3px 0 0;font-size:10px;line-height:1.45;color:var(--muted)}
+.squad-planner{margin:16px 0 18px}.planner-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.planner-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.planner-stat small{display:block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}.planner-stat strong{font-size:18px}.planner-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.planner-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}.planner-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.planner-card-head strong{font-size:12px}.planner-status{font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 7px;border-radius:999px}.planner-status.good{background:#e9f7f0;color:var(--green)}.planner-status.warn{background:#fff5df;color:var(--amber)}.planner-status.bad{background:#fdecec;color:var(--red)}.planner-player{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #eef2f6;font-size:10px}.planner-player:first-of-type{border-top:0}.planner-player small{color:var(--muted)}.hierarchy-chip{display:inline-block;padding:4px 7px;border-radius:999px;font-size:8px;font-weight:800;letter-spacing:.04em;background:#edf3fb;color:#33506f}.hierarchy-chip.titular{background:#e9f7f0;color:var(--green)}.hierarchy-chip.prescindible{background:#fdecec;color:var(--red)}.hierarchy-chip.desenvolupament{background:#eef0ff;color:#5657a8}@media(max-width:1050px){.planner-grid{grid-template-columns:1fr 1fr}.planner-summary{grid-template-columns:1fr 1fr}}@media(max-width:720px){.planner-grid,.planner-summary{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -369,11 +370,16 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
         </div>
       </div>
       <div id="squadHydrationStatus" class="sync-banner">Preparant plantilla…</div><div id="squadEnrichStatus" class="sync-banner hidden"></div>
+      <div class="panel squad-planner">
+        <div class="panel-head"><div><p class="eyebrow">SQUAD PLANNER</p><h2>Jerarquia i cobertura</h2></div><span id="squadPlannerTactic">4-3-3</span></div>
+        <div id="squadPlannerSummary" class="planner-summary"></div>
+        <div id="squadPlannerGrid" class="planner-grid"></div>
+      </div>
       <div id="squadAnalysisPanel" class="panel squad-analysis-panel">
         <div class="panel-head"><div><p class="eyebrow">SPORTING DIRECTOR REVIEW</p><h2>Anàlisi de plantilla</h2></div><span id="squadAnalysisTactic">4-3-3</span></div>
         <div id="squadAnalysisContent" class="squad-analysis-content"><p>Carrega la plantilla i prem “Analitzar plantilla” per rebre una recomanació esportiva segons el sistema de joc.</p></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th>% sou Barça</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol EA</th><th class="sortable" data-squad-sort="sportingHierarchy">Jerarquia</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th>% sou Barça</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
       <div class="loaned-out-section">
         <div class="subhead"><strong>CEDITS FORA</strong><span id="loanedOutCount">0 JUGADORS</span></div>
         <div class="table-wrap"><table><thead><tr><th class="sortable" data-loan-sort="name">Jugador</th><th class="sortable" data-loan-sort="pos">Pos.</th><th class="sortable" data-loan-sort="age">Edat</th><th class="sortable" data-loan-sort="destinationClub">Club destí</th><th class="sortable" data-loan-sort="loanYears">Durada cessió</th><th class="sortable" data-loan-sort="currentOvr">OVR</th><th class="sortable" data-loan-sort="value">Valor €M</th><th class="sortable" data-loan-sort="wage">Sou k€/set.</th><th class="sortable" data-loan-sort="wageShareDepor">% sou Barça</th><th class="sortable" data-loan-sort="purchaseOptionValue">Opció compra</th><th></th></tr></thead><tbody id="loanedOutTable"></tbody></table></div>
@@ -2015,6 +2021,68 @@ function renderDashboard(){const r=realism(),played=state.matches.length,totalPt
  const groups={GK:0,DEF:0,MID:0,ATT:0};state.squad.forEach(p=>groups[positionGroup(p.pos)]++);const total=state.squad.length;$('#donutTotal').textContent=total;const cols=['#c5d0de','#7f8ba0','#62b3ff','#1765d8'];let acc=0,parts=[];Object.values(groups).forEach((v,i)=>{const pct=total?v/total*100:25;parts.push(`${cols[i]} ${acc}% ${acc+pct}%`);acc+=pct});$('#squadDonut').style.background=`conic-gradient(${parts.join(',')})`;$('#positionLegend').innerHTML=[['POR','GK','pos-gk'],['DEF','DEF','pos-def'],['MIG','MID','pos-mid'],['ATA','ATT','pos-att']].map(x=>`<div class="legend-row"><span><i class="legend-dot ${x[2]}"></i>${x[0]}</span><strong>${groups[x[1]]}</strong></div>`).join('');const ages=state.squad.map(p=>num(p.age)).filter(Boolean);$('#avgAge').textContent=ages.length?`${(ages.reduce((a,b)=>a+b,0)/ages.length).toFixed(1)} EDAT MITJANA`:'— EDAT MITJANA';const ageCounts=[ages.filter(a=>a<=21).length,ages.filter(a=>a>=22&&a<=28).length,ages.filter(a=>a>=29).length];$('#ageBands').innerHTML=[['U21',ageCounts[0]],['22–28',ageCounts[1]],['29+',ageCounts[2]]].map(x=>`<div class="age-band"><span>${x[0]}</span><strong>${x[1]} jug.</strong></div>`).join('');
  $('#transferCount').textContent=`${state.transfers.length} OPS`;$('#spendValue').textContent=money(r.spend);$('#salesValue').textContent=money(r.sales);const max=Math.max(r.spend,r.sales,1);$('#spendBar').style.width=`${r.spend/max*100}%`;$('#salesBar').style.width=`${r.sales/max*100}%`;$('#transferNetLarge').textContent=money(r.net);$('#transferVerdict').textContent=!state.transfers.length?'Mercat encara sense activitat':r.spend<=r.realBudget?'Dins del pressupost operatiu':'Pressupost realista superat';$('#recentTransfers').innerHTML=state.transfers.slice(-3).reverse().map(t=>`<div class="recent-transfer"><span><strong>${t.player}</strong> · ${t.type}</span><span>${money(t.amount)}</span></div>`).join('');
  $('#alertCount').textContent=`${r.alerts.filter(a=>a[0]!=='OK').length} ALERTES`;$('#priorityAlerts').innerHTML=r.alerts.slice(0,3).map(a=>`<div class="priority-card ${a[3]}"><span class="priority">${a[0]}</span><strong>${a[1]}</strong><small>${a[2]}</small></div>`).join('');const marketPenalty=r.penalties.filter(p=>p.cat==='Mercat').reduce((a,p)=>a+p.pts,0),identityPenalty=r.penalties.filter(p=>p.cat==='Identitat').reduce((a,p)=>a+p.pts,0);const health=[['Mercat',marketPenalty===0?'Controlat':marketPenalty<=3?'Vigilar':'En risc',marketPenalty===0?'green':marketPenalty<=3?'amber':'red'],['Escala salarial',r.wageGrowth<=.08?'Sana':r.wageGrowth<=.10?'Vigilar':'Fora de rang',r.wageGrowth<=.08?'green':r.wageGrowth<=.10?'amber':'red'],['Mida plantilla',!activeSquad().length?'Pendent':activeSquad().length>=22&&activeSquad().length<=25?'Correcta':'Revisar',!activeSquad().length?'amber':activeSquad().length>=22&&activeSquad().length<=25?'green':'amber'],['Identitat',identityPenalty?'En risc':'Coherent',identityPenalty?'amber':'green']];$('#healthList').innerHTML=health.map(x=>`<div class="health-item"><div class="health-label"><strong>${x[0]}</strong><small>Regles de la temporada</small></div><span class="pill ${x[2]}">${x[1]}</span></div>`).join('');}
+const SPORTING_HIERARCHIES=['Titular','Rotació','Suplent','Desenvolupament','Prescindible','Cedit fora'];
+function inferredSportingHierarchy(p){
+  if(!p)return 'Suplent';
+  if(isLoanedOut(p))return 'Cedit fora';
+  const id=p.playerId;
+  const starters=new Set(Object.values(state.lineup?.starters||{}).filter(Boolean));
+  const bench=new Set((state.lineup?.bench||[]).filter(Boolean));
+  if(id&&starters.has(id))return 'Titular';
+  if(id&&bench.has(id))return 'Rotació';
+  const ovr=playerCareerOvr(p),age=num(p.age);
+  if(age>0&&age<=21&&ovr<78)return 'Desenvolupament';
+  if(ovr>=84)return 'Titular';
+  if(ovr>=80)return 'Rotació';
+  if(ovr>=75)return 'Suplent';
+  if(age>0&&age<=22)return 'Desenvolupament';
+  return 'Prescindible';
+}
+function sportingHierarchy(p){
+  return isLoanedOut(p)?'Cedit fora':(p?.sportingHierarchy||inferredSportingHierarchy(p));
+}
+function hierarchyClass(v){
+  const x=String(v||'').toLowerCase();
+  if(x==='titular')return 'titular';
+  if(x==='prescindible')return 'prescindible';
+  if(x==='desenvolupament')return 'desenvolupament';
+  return '';
+}
+function playerPlannerPositions(p){
+  const vals=[p?.pos,...String(p?.alternatePositions||'').split(/[ ,/]+/)].filter(Boolean).map(canonicalPos);
+  return [...new Set(vals)];
+}
+function renderSquadPlanner(){
+  const grid=$('#squadPlannerGrid'),summary=$('#squadPlannerSummary'),tag=$('#squadPlannerTactic');
+  if(!grid||!summary)return;
+  if(tag)tag.textContent=state.tactic||'4-3-3';
+  const active=activeSquad();
+  const defs=[['GK','POR',2],['RB','LD',2],['CB','DFC',4],['LB','LI',2],['CDM','MCD',2],['CM','MC',3],['CAM','MCO',2],['RW','ED',2],['LW','EI',2],['ST','DC',2]];
+  const rank={Titular:6,'Rotació':5,Suplent:4,Desenvolupament:3,Prescindible:1,'Cedit fora':0};
+  const cards=defs.map(([code,label,need])=>{
+    const players=active.filter(p=>playerPlannerPositions(p).includes(code))
+      .sort((a,b)=>(rank[sportingHierarchy(b)]-rank[sportingHierarchy(a)])||(playerCareerOvr(b)-playerCareerOvr(a)));
+    const titulars=players.filter(p=>sportingHierarchy(p)==='Titular').length;
+    let status='Cobert',cls='good';
+    if(players.length<Math.max(1,need-1)||!players.length){status='Prioritat';cls='bad';}
+    else if(players.length<need||titulars===0){status='Just';cls='warn';}
+    return {code,label,need,players,status,cls};
+  });
+  const titulars=active.filter(p=>sportingHierarchy(p)==='Titular').length;
+  const rotation=active.filter(p=>['Rotació','Suplent'].includes(sportingHierarchy(p))).length;
+  const development=active.filter(p=>sportingHierarchy(p)==='Desenvolupament').length;
+  const priorities=cards.filter(x=>x.status==='Prioritat').length;
+  summary.innerHTML=
+    '<div class="planner-stat"><small>Titulars</small><strong>'+titulars+'</strong></div>'+
+    '<div class="planner-stat"><small>Rotació / suplents</small><strong>'+rotation+'</strong></div>'+
+    '<div class="planner-stat"><small>Desenvolupament</small><strong>'+development+'</strong></div>'+
+    '<div class="planner-stat"><small>Prioritats mercat</small><strong>'+priorities+'</strong></div>';
+  grid.innerHTML=cards.map(x=>
+    '<div class="planner-card"><div class="planner-card-head"><strong>'+x.label+'</strong><span class="planner-status '+x.cls+'">'+x.status+'</span></div>'+
+    (x.players.length?x.players.slice(0,5).map(p=>'<div class="planner-player"><span><strong>'+p.name+'</strong><br><small>OVR '+playerCareerOvr(p)+' · '+displayPosEs(p.pos)+'</small></span><span class="hierarchy-chip '+hierarchyClass(sportingHierarchy(p))+'">'+sportingHierarchy(p)+'</span></div>').join(''):'<div class="planner-player"><span><strong>Sense cobertura</strong><br><small>Necessitat de mercat</small></span></div>')+
+    '</div>'
+  ).join('');
+}
 function isLoanedOut(p){
   return p?.ownership==='Cedit fora' || Boolean(String(p?.destinationClub||'').trim());
 }
@@ -2070,6 +2138,7 @@ function sortValueForPlayer(p,key){
   if(key==='delta')return ovrDelta(p);
   if(key==='duration')return p.ownership==='Cedit al Barça'?num(p.loanYears):num(p.contractYears);
   if(key==='updated')return p.ovrUpdatedAt||'';
+  if(key==='sportingHierarchy'){const r={Titular:6,'Rotació':5,Suplent:4,Desenvolupament:3,Prescindible:1,'Cedit fora':0};return r[sportingHierarchy(p)]||0;}
   if(['age','value','wage','contractYears','loanYears','wageShareDepor','purchaseOptionValue'].includes(key))return num(p[key]);
   return String(p[key]||'').toLocaleLowerCase('ca');
 }
@@ -2101,12 +2170,13 @@ function renderSquadTablesOnly(){
     const activeEntries=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort);
     activeBody.innerHTML=activeEntries.map(({p,i})=>{
       const d=ovrDelta(p);
-      return '<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
+      return '<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td><span class="hierarchy-chip '+hierarchyClass(sportingHierarchy(p))+'">'+sportingHierarchy(p)+'</span></td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
     }).join('');
     const loanedOut=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>isLoanedOut(x.p)),loanSort);
     const count=$('#loanedOutCount');if(count)count.textContent=loanedOut.length+' JUGADOR'+(loanedOut.length===1?'':'S');
     loanBody.innerHTML=loanedOut.length?loanedOut.map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.destinationClub||'—')+'</td><td>'+(num(p.loanYears)?num(p.loanYears)+' any'+(num(p.loanYears)===1?'':'s'):'—')+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+num(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)?valueMDisplay(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
     bindSquadSortHeaders();
+    renderSquadPlanner();
   }catch(e){console.error('squad-only render',e)}
 }
 function renderFinancePanel(){
@@ -2181,7 +2251,8 @@ window.editSquadPlayer=i=>{
     {label:'Nom',name:'name',full:1,value:p.name},
     {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC'],value:p.pos||'POR'},
     {label:'Edat',name:'age',type:'number',value:p.age||''},
-    {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:p.role||'Rotación'},
+    {label:'Rol EA',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:p.role||'Rotación'},
+    {label:'Jerarquia esportiva',name:'sportingHierarchy',type:'select',options:['Titular','Rotació','Suplent','Desenvolupament','Prescindible'],value:sportingHierarchy(p)},
     {label:'Club preferit / vincle emocional',name:'favoriteClub',value:p.favoriteClub||'',optional:1,placeholder:'Ex.: Barcelona'},
     {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Barça','Cedit fora'],value:p.ownership||'Propietat'},
     {label:'Club propietari (si és cessió entrant)',name:'parentClub',value:p.parentClub||'',optional:1},
@@ -2297,7 +2368,8 @@ $('#addPlayerBtn').onclick=()=>modal('Afegir jugador',[
  {label:'Nom',name:'name',full:1},
  {label:'Posició',name:'pos',type:'select',options:['POR','LI','DFC','LD','MCD','MC','MCO','MI','MD','EI','ED','DC']},
  {label:'Edat',name:'age',type:'number'},
- {label:'Rol',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:'Rotación'},
+ {label:'Rol EA',name:'role',type:'select',options:['Promesa','Ocasional','Rotación','Importante','Clave'],value:'Rotación'},
+ {label:'Jerarquia esportiva',name:'sportingHierarchy',type:'select',options:['Titular','Rotació','Suplent','Desenvolupament','Prescindible'],value:'Suplent'},
  {label:'Club preferit / vincle emocional',name:'favoriteClub',optional:1,placeholder:'Ex.: Barcelona'},
  {label:'Vinculació',name:'ownership',type:'select',options:['Propietat','Cedit al Barça','Cedit fora'],value:'Propietat'},
  {label:'Club propietari (si és cessió entrant)',name:'parentClub',optional:1},
