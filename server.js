@@ -913,7 +913,9 @@ async function enrichBarcaSquadFinancials(){
 async function buildDirectorAiContext(){
   const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
   const state=stateRow.rows[0]?.data||{};
-  const squad=await readDedicatedSquad();
+  const rawSquad=await readDedicatedSquad();
+  const squad=rawSquad.filter(p=>!(p?.ownership==='Cedit fora'||String(p?.destinationClub||'').trim()));
+  const loanedOut=rawSquad.filter(p=>(p?.ownership==='Cedit fora'||String(p?.destinationClub||'').trim()));
   const finance=state.finance||{};
   const transfers=Array.isArray(state.transfers)?state.transfers:[];
   const matches=Array.isArray(state.matches)?state.matches:[];
@@ -1004,6 +1006,10 @@ async function buildDirectorAiContext(){
     tactic,
     clubStatus:state.clubStatus||CLUB_CONFIG.clubStatus,
     squadSize:players.length,
+    loanedOut:loanedOut.map(p=>({
+      name:p.name,pos:positionEs(p.pos),age:Number(p.age||0),ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
+      destinationClub:p.destinationClub||'',loanYears:Number(p.loanYears||0)
+    })),
     rotation:{
       lineupDefined,
       startingXI,
@@ -1050,6 +1056,7 @@ PERSONALITAT I CRITERI
 COM HAS DE DECIDIR
 - Valora conjuntament OVR actual, rol, minuts, edat, contracte, profunditat de posició, salari, valor, propietat, pressupost i equilibri de vestidor.
 - L'alineació manual és una dada prioritària de jerarquia. Si rotation.lineupDefined és alt, tracta rotation.startingXI com el pla titular actual, rotation.bench com la rotació immediata i rotation.outsideRotation com els jugadors que ara mateix tenen menys espai.
+- Els jugadors de loanedOut estan cedits fora: NO formen part de la plantilla activa, NO poden ocupar alineació o rotació actual, i només els has de valorar com a actius cedits que poden tornar en el futur.
 - No ignoris l'alineació quan recomanis vendes, cessions o fitxatges: abans de dir que sobra o falta un perfil, comprova qui ocupa aquell lloc al XI i qui hi ha a la banqueta.
 - Si un jugador és titular a rotation.startingXI, parteix de la hipòtesi que és important per al projecte encara que tingui pocs minuts registrats. Si és a la banqueta, considera'l rotació abans de proposar una cessió.
 - La jerarquia esportiva pesa més que els minuts si la temporada tot just comença.
