@@ -457,6 +457,77 @@ async function initDb() {
     console.log('[ENSURE_LOANED_OUT]',JSON.stringify({inserted,updated,total:loanedOutSnapshot.length}));
   }catch(e){console.warn('[ENSURE_LOANED_OUT_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: defensive/central midfielders, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const midfieldSnapshot=[
+      {id:'manual-mid-rodri',match:['rodrigo hernandez','rodrigo hernandez cascante','rodri'],data:{
+        name:'Rodrigo Hernández Cascante',pos:'MCD',alternatePositions:'MC',age:30,
+        baseOvr:90,currentOvr:90,potential:91,value:100,wage:258000,
+        role:'Clave',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-mid-marc-bernal',match:['marc bernal','marc bernal casas'],data:{
+        name:'Marc Bernal Casas',pos:'MCD',alternatePositions:'MC',age:19,
+        baseOvr:78,currentOvr:78,potential:88,value:13.5,wage:24000,
+        role:'Rotación',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-loan-marc-casado',match:['marc casado','marc casado torras'],data:{
+        name:'Marc Casadó Torras',pos:'MCD',alternatePositions:'MC',age:22,
+        baseOvr:78,currentOvr:78,potential:83,value:15,wage:95000,
+        role:'Rotación',ownership:'Cedit fora',parentClub:'FC Barcelona',
+        destinationClub:'RC Deportivo A Coruña',contractYears:0,loanYears:1,
+        purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:0,wageShareManual:false,realClub:'RC Deportivo A Coruña'
+      }},
+      {id:'manual-mid-frenkie',match:['frenkie de jong'],data:{
+        name:'Frenkie de Jong',pos:'MC',alternatePositions:'MCD MCO',age:29,
+        baseOvr:86,currentOvr:86,potential:87,value:66,wage:250000,
+        role:'Clave',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }},
+      {id:'manual-mid-brian-farinas',match:['brian farinas','brian farinas perez'],data:{
+        name:'Brian Fariñas Pérez',pos:'MC',alternatePositions:'MCD MCO',age:20,
+        baseOvr:65,currentOvr:65,potential:81,value:0.825,wage:22000,
+        role:'Promesa',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let inserted=0,updated=0;
+    for(const snap of midfieldSnapshot){
+      const existing=rows.rows.find(r=>{
+        const n=normalizeSnapshotName(r.data?.name);
+        return snap.match.some(m=>n.includes(m));
+      });
+      const finalData={
+        ...(existing?.data||{}),...snap.data,
+        playerId:existing?.data?.playerId||snap.id,
+        ovrUpdatedAt:'18/10/2026',
+        manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'
+      };
+      if(existing){
+        await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+          [existing.player_id,JSON.stringify(finalData)]);
+        updated++;
+      }else{
+        await pool.query(
+          `INSERT INTO squad_players(player_id,data,updated_at)
+           VALUES($1,$2::jsonb,NOW())
+           ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+          [snap.id,JSON.stringify(finalData)]
+        );
+        inserted++;
+      }
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_MID]',JSON.stringify({inserted,updated,total:midfieldSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_MID_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
