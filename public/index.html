@@ -2013,7 +2013,7 @@ function performanceSelectOptions(){
 function renderPerformance(){
   performanceSelectOptions();
   const tb=$('#performanceTable'); if(!tb)return;
-  tb.innerHTML=sortedPlayerEntries(state.squad.map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort).map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+(p.pos||'—')+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+(num(p.minutes)||0)+'</td><td>'+(num(p.goals)||0)+'</td><td>'+(num(p.assists)||0)+'</td><td>'+((num(p.goals)||0)+(num(p.assists)||0))+'</td><td><button class="ghost-btn" onclick="editPerformance('+i+')">Editar</button></td></tr>').join('');
+  tb.innerHTML=sortedPlayerEntries(state.squad.map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort).map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+(num(p.minutes)||0)+'</td><td>'+(num(p.goals)||0)+'</td><td>'+(num(p.assists)||0)+'</td><td>'+((num(p.goals)||0)+(num(p.assists)||0))+'</td><td><button class="ghost-btn" onclick="editPerformance('+i+')">Editar</button></td></tr>').join('');
   const sel=$('#performancePlayer'); if(sel) updatePerformanceContext();
 }
 function updatePerformanceContext(){
@@ -2063,11 +2063,11 @@ function renderSquadTablesOnly(){
     const activeEntries=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort);
     activeBody.innerHTML=activeEntries.map(({p,i})=>{
       const d=ovrDelta(p);
-      return '<tr><td><strong>'+p.name+'</strong></td><td>'+(p.pos||'—')+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
+      return '<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
     }).join('');
     const loanedOut=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>isLoanedOut(x.p)),loanSort);
     const count=$('#loanedOutCount');if(count)count.textContent=loanedOut.length+' JUGADOR'+(loanedOut.length===1?'':'S');
-    loanBody.innerHTML=loanedOut.length?loanedOut.map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+(p.pos||'—')+'</td><td>'+(p.age||'—')+'</td><td>'+(p.destinationClub||'—')+'</td><td>'+(num(p.loanYears)?num(p.loanYears)+' any'+(num(p.loanYears)===1?'':'s'):'—')+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+num(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)?valueMDisplay(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
+    loanBody.innerHTML=loanedOut.length?loanedOut.map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.destinationClub||'—')+'</td><td>'+(num(p.loanYears)?num(p.loanYears)+' any'+(num(p.loanYears)===1?'':'s'):'—')+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+num(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)?valueMDisplay(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
     bindSquadSortHeaders();
   }catch(e){console.error('squad-only render',e)}
 }
@@ -2703,7 +2703,7 @@ setTimeout(()=>cloudLoad(),50);
           : 'PROPI';
         return '<tr>'+
           '<td><strong>'+esc(p.name||'')+'</strong></td>'+
-          '<td>'+esc(p.pos||'—')+'</td>'+
+          '<td>'+esc(displayPosEs(p.pos))+'</td>'+
           '<td>'+esc(p.age||'—')+'</td>'+
           '<td>'+esc(p.role||'—')+'</td>'+
           '<td>'+link+'</td>'+
@@ -2721,7 +2721,7 @@ setTimeout(()=>cloudLoad(),50);
       }).join('');
       loanBody.innerHTML=loans.length?loans.map(p=>'<tr>'+
         '<td><strong>'+esc(p.name||'')+'</strong></td>'+
-        '<td>'+esc(p.pos||'—')+'</td>'+
+        '<td>'+esc(displayPosEs(p.pos))+'</td>'+
         '<td>'+esc(p.age||'—')+'</td>'+
         '<td>'+esc(p.destinationClub||'—')+'</td>'+
         '<td>'+(n(p.loanYears)?n(p.loanYears)+' any'+(n(p.loanYears)===1?'':'s'):'—')+'</td>'+
