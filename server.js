@@ -1444,6 +1444,8 @@ async function buildDirectorAiContext(){
 
   const players=squad.map(p=>({
     name:p.name,pos:positionEs(p.pos),age:Number(p.age||0),role:p.role||'',
+    hierarchy:p.sportingHierarchy||'',
+    alternatePositions:p.alternatePositions||'',
     ovr:Number(p.currentOvr||p.ovr||p.baseOvr||0),
     minutes:Number(p.minutes||0),goals:Number(p.goals||0),assists:Number(p.assists||0),
     contractYears:Number(p.contractYears||0),wage:Number(p.wage||0),value:Number(p.value||0),
@@ -1577,6 +1579,8 @@ PERSONALITAT I CRITERI
 COM HAS DE DECIDIR
 - Valora conjuntament OVR actual, rol, minuts, edat, contracte, profunditat de posició, salari, valor, propietat, pressupost i equilibri de vestidor.
 - L'alineació manual és una dada prioritària de jerarquia. Si rotation.lineupDefined és alt, tracta rotation.startingXI com el pla titular actual, rotation.bench com la rotació immediata i rotation.outsideRotation com els jugadors que ara mateix tenen menys espai.
+- Si un jugador té "hierarchy" informat, tracta aquesta dada com la jerarquia esportiva explícita del club: Titular, Rotació, Suplent, Desenvolupament o Prescindible. Aquesta jerarquia pesa més que una inferència basada només en OVR, edat o minuts.
+- Per detectar necessitats de mercat, considera també alternatePositions i evita recomanar un fitxatge si la plantilla ja té cobertura funcional suficient.
 - Els jugadors de loanedOut estan cedits fora: NO formen part de la plantilla activa, NO poden ocupar alineació o rotació actual, i només els has de valorar com a actius cedits que poden tornar en el futur.
 - No ignoris l'alineació quan recomanis vendes, cessions o fitxatges: abans de dir que sobra o falta un perfil, comprova qui ocupa aquell lloc al XI i qui hi ha a la banqueta.
 - Si un jugador és titular a rotation.startingXI, parteix de la hipòtesi que és important per al projecte encara que tingui pocs minuts registrats. Si és a la banqueta, considera'l rotació abans de proposar una cessió.
