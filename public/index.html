@@ -2776,7 +2776,7 @@ setTimeout(()=>cloudLoad(),50);
           '<td>'+wage(p.wage)+'</td>'+
           '<td>'+share(p)+'%</td>'+
           '<td>'+(p.ownership==='Cedit al Barça'?'—':duration)+'</td>'+
-          '<td><button class="ghost-btn" onclick="deleteVisibleSquadPlayer(\''+esc(String(p.playerId||''))+'\',\''+esc(String(p.name||'Jugador')).replace(/'/g,'&#39;')+'\')">Eliminar</button></td>'+
+          '<td><button type="button" class="ghost-btn" data-delete-squad-id="'+esc(String(p.playerId||''))+'" data-delete-squad-name="'+esc(String(p.name||'Jugador'))+'">Eliminar</button></td>'+
         '</tr>';
       }).join('');
       loanBody.innerHTML=loans.length?loans.map(p=>'<tr>'+
@@ -2790,7 +2790,7 @@ setTimeout(()=>cloudLoad(),50);
         '<td>'+wage(p.wage)+'</td>'+
         '<td>'+share(p)+'%</td>'+
         '<td>'+(p.purchaseOptionType==='Opció de compra'&&n(p.purchaseOptionValue)?value(p.purchaseOptionValue)+' M€':'—')+'</td>'+
-        '<td><button class="ghost-btn" onclick="deleteVisibleSquadPlayer(\''+esc(String(p.playerId||''))+'\',\''+esc(String(p.name||'Jugador')).replace(/'/g,'&#39;')+'\')">Eliminar</button></td>'+
+        '<td><button type="button" class="ghost-btn" data-delete-squad-id="'+esc(String(p.playerId||''))+'" data-delete-squad-name="'+esc(String(p.name||'Jugador'))+'">Eliminar</button></td>'+
       '</tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
       const count=document.getElementById('loanedOutCount');if(count)count.textContent=loans.length+' JUGADOR'+(loans.length===1?'':'S');
       const banner=document.getElementById('squadHydrationStatus');
@@ -2821,6 +2821,12 @@ setTimeout(()=>cloudLoad(),50);
 
   // Capture sortable-header clicks before the legacy app can replace/override handlers.
   document.addEventListener('click',e=>{
+    const deleteBtn=e.target.closest&&e.target.closest('[data-delete-squad-id]');
+    if(deleteBtn){
+      e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
+      deleteVisibleSquadPlayer(deleteBtn.dataset.deleteSquadId,deleteBtn.dataset.deleteSquadName||'Jugador');
+      return;
+    }
     const squadTh=e.target.closest&&e.target.closest('[data-squad-sort]');
     if(squadTh){
       e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();
