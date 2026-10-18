@@ -591,6 +591,46 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_AM]',JSON.stringify({inserted,updated,total:attackingMidSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_AM_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: Dominik Livakovic, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const snap={
+      id:'manual-gk-livakovic',
+      match:['dominik livakovic'],
+      data:{
+        name:'Dominik Livaković',pos:'POR',alternatePositions:'',age:31,
+        baseOvr:78,currentOvr:78,potential:82,value:7.5,wage:76000,
+        role:'Rotación',ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:4,loanYears:0,purchaseOptionType:'Sense opció',purchaseOptionValue:0,
+        wageShareDepor:100,wageShareManual:false,realClub:'FC Barcelona'
+      }
+    };
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    const existing=rows.rows.find(r=>{
+      const n=normalizeSnapshotName(r.data?.name);
+      return snap.match.some(m=>n.includes(m));
+    });
+    const finalData={
+      ...(existing?.data||{}),...snap.data,
+      playerId:existing?.data?.playerId||snap.id,
+      ovrUpdatedAt:'18/10/2026',
+      manualSnapshotSource:'SoFIFA FC27 · user screenshot · 18/10/2026'
+    };
+    if(existing){
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',
+        [existing.player_id,JSON.stringify(finalData)]);
+      console.log('[MANUAL_SQUAD_SNAPSHOT_LIVAKOVIC]',JSON.stringify({updated:1,inserted:0}));
+    }else{
+      await pool.query(
+        `INSERT INTO squad_players(player_id,data,updated_at)
+         VALUES($1,$2::jsonb,NOW())
+         ON CONFLICT(player_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`,
+        [snap.id,JSON.stringify(finalData)]
+      );
+      console.log('[MANUAL_SQUAD_SNAPSHOT_LIVAKOVIC]',JSON.stringify({updated:0,inserted:1}));
+    }
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_LIVAKOVIC_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
