@@ -774,7 +774,7 @@ function normalizeLoadedSquad(list){
     return out;
   }).filter(p=>{
     const name=normName(p.name);
-    return !(name.includes('hector fort'));
+    return !name.includes('fort');
   });
 
   const seen=new Map();
