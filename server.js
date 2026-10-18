@@ -327,6 +327,45 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_DEF]',JSON.stringify({updated,total:defenderSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_DEF_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: centre-backs, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const centreBackSnapshot=[
+      {match:['pau cubarsi','pau cubarsi paredes'],patch:{
+        pos:'DFC',alternatePositions:'',age:19,baseOvr:86,currentOvr:86,potential:91,
+        value:64.5,wage:77000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:3,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['gerard martin','gerard martin langreo'],patch:{
+        pos:'DFC',alternatePositions:'LI MI',age:24,baseOvr:79,currentOvr:79,potential:84,
+        value:17.5,wage:105000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['andreas christensen','andreas bodtker christensen'],patch:{
+        pos:'DFC',alternatePositions:'MC MCD',age:30,baseOvr:79,currentOvr:79,potential:83,
+        value:14.5,wage:130000,ownership:'Propietat',parentClub:'',destinationClub:'',
+        contractYears:2,loanYears:0,realClub:'FC Barcelona'
+      }},
+      {match:['ronald araujo','ronald federico araujo da silva'],patch:{
+        pos:'DFC',alternatePositions:'LD',age:27,baseOvr:80,currentOvr:80,potential:86,
+        value:19.5,wage:130000,ownership:'Cedit fora',parentClub:'FC Barcelona',
+        destinationClub:'Liverpool FC',loanYears:1,realClub:'Liverpool FC'
+      }}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let updated=0;
+    for(const row of rows.rows){
+      const current=row.data||{};
+      const name=normalizeSnapshotName(current.name);
+      const snap=centreBackSnapshot.find(x=>x.match.some(m=>name.includes(m)));
+      if(!snap)continue;
+      const next={...current,...snap.patch,ovrUpdatedAt:'18/10/2026',manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'};
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',[row.player_id,JSON.stringify(next)]);
+      updated++;
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_CB]',JSON.stringify({updated,total:centreBackSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_CB_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
