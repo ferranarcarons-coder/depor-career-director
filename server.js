@@ -1891,6 +1891,30 @@ const server = http.createServer(async (req, res) => {
       return json(res,200,{ok:true,squad:incoming});
     }
 
+    if (u.pathname.startsWith('/api/squad/') && req.method === 'DELETE') {
+      if (!dbReady) return json(res, 503, {error:'Base de dades no configurada.'});
+      const playerId=decodeURIComponent(u.pathname.slice('/api/squad/'.length));
+      if(!playerId) return json(res,400,{error:'Jugador no vàlid.'});
+      const found=await pool.query('SELECT data FROM squad_players WHERE player_id=$1',[playerId]);
+      if(!found.rowCount) return json(res,404,{error:'Jugador no trobat.'});
+      await pool.query('DELETE FROM squad_players WHERE player_id=$1',[playerId]);
+      const player=found.rows[0]?.data||{};
+      const stateRow=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
+      if(stateRow.rowCount){
+        const st=stateRow.rows[0].data||{};
+        if(st.lineup&&typeof st.lineup==='object'){
+          st.lineup.starters=st.lineup.starters||{};
+          for(const k of Object.keys(st.lineup.starters)){
+            if(st.lineup.starters[k]===playerId) st.lineup.starters[k]='';
+          }
+          st.lineup.bench=Array.isArray(st.lineup.bench)?st.lineup.bench.filter(id=>id!==playerId):[];
+        }
+        await pool.query('UPDATE career_state SET data=$2::jsonb,updated_at=NOW() WHERE id=$1',['main',JSON.stringify(st)]);
+      }
+      console.log('[SQUAD_PLAYER_DELETE]',JSON.stringify({playerId,name:player.name||''}));
+      return json(res,200,{ok:true,playerId,name:player.name||''},'no-store');
+    }
+
     if (u.pathname === '/api/transfers/history' && req.method === 'GET') {
       if (!dbReady) return json(res,503,{error:'Base de dades no configurada.'});
       const current=await pool.query('SELECT data FROM career_state WHERE id=$1',['main']);
