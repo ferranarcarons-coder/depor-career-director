@@ -1453,7 +1453,7 @@ function outgoingAdvice(p,mode,offer=0){
 function positionFromText(text){const t=normalizeDirectorText(text);const map=[['porter','GK'],['goalkeeper','GK'],['lateral dret','RB'],['lateral derecho','RB'],['lateral esquerre','LB'],['lateral izquierdo','LB'],['central','CB'],['pivot','CDM'],['migcentre defensiu','CDM'],['mediocentro defensivo','CDM'],['migcentre','CM'],['mediocentro','CM'],['mitjapunta','CAM'],['mediapunta','CAM'],['extrem dret','RW'],['extremo derecho','RW'],['extrem esquerre','LW'],['extremo izquierdo','LW'],['davanter','ST'],['delantero','ST']];for(const [name,pos] of map)if(t.includes(name))return pos;return ''}
 function cleanPlayerQuery(text){return String(text||'').replace(/\b(veus|creus|seria|es|és|realista|fitxar|fitxaria|comprar|fichar|ficharia|al|el|la|pel|per|depor|dépor|rc deportivo|podriem|podríem|que|un|una)\b/gi,' ').replace(/[?¿!¡.,:;]/g,' ').replace(/\s+/g,' ').trim()}
 async function directorSigningAdvice(text){const q=cleanPlayerQuery(text);if(q.length<2)return {label:'NECESSITO EL NOM',cls:'warn',text:'Digues-me quin jugador estàs valorant.'};const sr=await fetch('/api/players/search?q='+encodeURIComponent(q));const sd=await sr.json();const ref=(sd.players||[])[0];if(!ref)return {label:'NO TROBAT',cls:'warn',text:'No he trobat aquest jugador a la BBDD FC27.'};const dr=await fetch('/api/players/detail?'+new URLSearchParams({id:ref.id||'',name:ref.name||''}));const dd=await dr.json();const p=dd.player||ref;const current=careerOvrForName(p.name,p.overall)||p.overall;const expected=num(current)>=80?'Titular':num(current)>=75?'Rotació':'Aposta';const a={player:p.name,position:p.position,age:p.age,club:p.club,market:inferMarketFromNationality(p.nationality),playerLevel:overallToLevel(current),originLevel:inferOriginLevel(p.club,p.league,current),overall:current,currentRole:'Titular',expectedRole:expected,type:'Compra',hiddenPotential:'No',franchise:'No',context:'Normal',override:'No'};const r=transferFit(a);return {label:r.verdict.toUpperCase()+' · '+r.score+'/100',cls:r.cls,text:r.recommend+(r.reasons.length?' '+r.reasons.slice(0,3).join(' · '):'')}}
-async function directorPositionAdvice(pos){const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=5');const d=await r.json();const list=d.players||[];if(!list.length)return {label:'SENSE CANDIDATS',cls:'warn',text:'No he trobat candidats adequats.'};return {label:'TOP '+pos,cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · '+p.club+' · OVR '+p.overall+' · Fit '+p.scoutingScore+'/100').join('<br>')}}
+async function directorPositionAdvice(pos){const r=await fetch('/api/players/recommend?position='+encodeURIComponent(pos)+'&clubStatus='+encodeURIComponent(state.clubStatus)+'&limit=5');const d=await r.json();const list=d.players||[];if(!list.length)return {label:'SENSE CANDIDATS',cls:'warn',text:'No he trobat candidats adequats.'};return {label:'TOP '+displayPosEs(pos),cls:'good',text:list.map((p,i)=>(i+1)+'. '+p.name+' · '+p.club+' · OVR '+p.overall+' · Fit '+p.scoutingScore+'/100').join('<br>')}}
 function squadSellCandidates(mode){
   if(!state.squad.length)return {label:'PLANTILLA PENDENT',cls:'warn',text:'Primer carrega la plantilla.'};
   const minScore=mode==='loan'?55:48;
@@ -1684,6 +1684,11 @@ function positionFitsSlot(playerPos,slot){
   };
   return (compat[slot]||[]).includes(p);
 }
+function displayPosEs(pos){
+  const p=canonicalPos(pos);
+  const map={GK:'POR',RB:'LD',LB:'LI',CB:'DFC',CDM:'MCD',CM:'MC',CAM:'MCO',RM:'MD',LM:'MI',RW:'ED',LW:'EI',ST:'DC'};
+  return map[p]||String(pos||'—');
+}
 function spanishSlotLabel(slot,index){
   const map={GK:'POR',LB:'LI',CB:'DFC',RB:'LD',CDM:'MCD',CM:'MC',CAM:'MCO',LM:'MI',RM:'MD',LW:'EI',RW:'ED',ST:'DC'};
   const base=map[slot]||slot;
@@ -1713,7 +1718,7 @@ function lineupPlayerOptions(selectedId,excludeIds=[]){
   const excluded=new Set(excludeIds.filter(Boolean));
   return '<option value="">— Selecciona —</option>'+activeSquad().slice().sort((a,b)=>String(a.name).localeCompare(String(b.name),'ca')).map(p=>{
     const disabled=excluded.has(p.playerId)&&p.playerId!==selectedId?' disabled':'';
-    return '<option value="'+p.playerId+'" '+(p.playerId===selectedId?'selected':'')+disabled+'>'+p.name+' · '+(p.pos||'—')+' · OVR '+(playerCareerOvr(p)||'—')+'</option>';
+    return '<option value="'+p.playerId+'" '+(p.playerId===selectedId?'selected':'')+disabled+'>'+p.name+' · '+(displayPosEs(p.pos)||'—')+' · OVR '+(playerCareerOvr(p)||'—')+'</option>';
   }).join('');
 }
 function normalizeLineupForTactic(){
@@ -1804,9 +1809,9 @@ function squadFormationAnalysis(){
   const loan= squad.map(p=>({p,a:outgoingAdvice(p,'loan')})).filter(x=>x.a.score>=55).sort((a,b)=>b.a.score-a.a.score).slice(0,3);
   const lowStarters=xi.filter(x=>x.p).sort((a,b)=>playerCareerOvr(a.p)-playerCareerOvr(b.p)).slice(0,3);
   const priorities=[];
-  if(missing.length)priorities.push('Falten perfils naturals per '+[...new Set(missing)].join(', ')+'.');
-  if(thin.length)priorities.push('Profunditat justa a '+thin.slice(0,3).map(x=>x[0]).join(', ')+'.');
-  if(lowStarters.length)priorities.push('Punts millorables de l’XI: '+lowStarters.map(x=>x.slot+' ('+x.p.name+', OVR '+playerCareerOvr(x.p)+')').join(' · ')+'.');
+  if(missing.length)priorities.push('Falten perfils naturals per '+[...new Set(missing)].map(x=>spanishSlotLabel(x,0)).join(', ')+'.');
+  if(thin.length)priorities.push('Profunditat justa a '+thin.slice(0,3).map(x=>spanishSlotLabel(x[0],0)).join(', ')+'.');
+  if(lowStarters.length)priorities.push('Punts millorables de l’XI: '+lowStarters.map(x=>spanishSlotLabel(x.slot,0)+' ('+x.p.name+', OVR '+playerCareerOvr(x.p)+')').join(' · ')+'.');
   if(manualLineup){
     const benchPlayers=(state.lineup?.bench||[]).map(playerById).filter(Boolean);
     priorities.unshift('L’anàlisi parteix del teu XI real, no d’un XI calculat automàticament.'+(benchPlayers.length?' Banqueta definida: '+benchPlayers.map(p=>p.name).join(', ')+'.':''));
@@ -1844,7 +1849,7 @@ function renderSquadAnalysis(scroll=false){
         (exec.length?exec.map((x,i)=>'<div class="exec-plan-item"><span class="priority-rank">'+(i+1)+'</span><div><strong>'+x.title+'</strong><p>'+x.detail+'</p></div></div>').join(''):'<div class="exec-plan-item"><span class="priority-rank">✓</span><div><strong>Sense urgències</strong><p>No hi ha cap decisió immediata evident.</p></div></div>')+
       '</div></section>'+
       '<section class="analysis-section"><div class="analysis-section-head"><h3>Pla jugador per jugador</h3><span>TOP '+decisions.length+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Jugador</th><th>Situació</th><th>Acció</th><th>Per què</th></tr></thead><tbody>'+
-        decisions.map(x=>'<tr><td><strong>'+x.p.name+'</strong><br><small>'+x.p.pos+' · '+(x.p.age??'—')+' anys · '+(x.p.role||'—')+'</small></td><td>'+(x.starter?(sportingRotationSets().source==='manual'?'Titular':'XI orientatiu'):x.onBench?(sportingRotationSets().source==='manual'?'Banqueta':'Rotació orientativa'):'Fora rotació')+(x.wageRank?' · salari #'+x.wageRank:'')+'</td><td><span class="action-chip '+x.cls+'">'+x.action+'</span></td><td>'+x.reasons.join(' · ')+'</td></tr>').join('')+
+        decisions.map(x=>'<tr><td><strong>'+x.p.name+'</strong><br><small>'+displayPosEs(x.p.pos)+' · '+(x.p.age??'—')+' anys · '+(x.p.role||'—')+'</small></td><td>'+(x.starter?(sportingRotationSets().source==='manual'?'Titular':'XI orientatiu'):x.onBench?(sportingRotationSets().source==='manual'?'Banqueta':'Rotació orientativa'):'Fora rotació')+(x.wageRank?' · salari #'+x.wageRank:'')+'</td><td><span class="action-chip '+x.cls+'">'+x.action+'</span></td><td>'+x.reasons.join(' · ')+'</td></tr>').join('')+
       '</tbody></table></div></section>'+
       '<section class="analysis-section"><div class="analysis-section-head"><h3>Mapa de profunditat tàctica</h3><span>'+(state.tactic||'4-3-3')+'</span></div><div style="overflow:auto"><table class="analysis-table"><thead><tr><th>Posició</th><th>Titular(s)</th><th>Recanvi(s)</th><th>Urgència</th><th>Diagnòstic</th></tr></thead><tbody>'+
         positions.map(x=>'<tr><td><strong>'+x.label+'</strong></td><td>'+(x.starters.length?x.starters.map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+(x.backups.length?x.backups.slice(0,2).map(p=>p.name+' ('+playerCareerOvr(p)+')').join(', '):'—')+'</td><td>'+x.urgency+'/100</td><td>'+(x.reasons.join(' · ')||'cobertura correcta')+'</td></tr>').join('')+
