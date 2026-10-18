@@ -730,6 +730,21 @@ async function initDb() {
     console.log('[MANUAL_SQUAD_SNAPSHOT_FW]',JSON.stringify({inserted,updated,total:forwardSnapshot.length}));
   }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_FW_ERROR]',e.message);}
 
+  // Remove players the user confirmed are no longer part of FC Barcelona.
+  try{
+    const normalizeName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const removeNames=['alvaro cortes','guille fernandez','guillermo fernandez'];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    const ids=rows.rows.filter(r=>{
+      const n=normalizeName(r.data?.name);
+      return removeNames.some(x=>n===x||n.includes(x));
+    }).map(r=>r.player_id);
+    if(ids.length){
+      await pool.query('DELETE FROM squad_players WHERE player_id = ANY($1::text[])',[ids]);
+    }
+    console.log('[REMOVE_NON_BARCA_PLAYERS]',JSON.stringify({removed:ids.length,names:removeNames}));
+  }catch(e){console.warn('[REMOVE_NON_BARCA_PLAYERS_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
