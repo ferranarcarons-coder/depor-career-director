@@ -1085,7 +1085,7 @@ function objectiveProgress(o,r){
   if(o.name==='Guanyar LaLiga'){if(!played)return 0;if(last===1)return 100;if(last===2)return 85;if(last===3)return 70;if(last<=4)return 55;if(last<=6)return 35;return 15}
   if(o.name==='Disciplina salarial'){return r.wageGrowth<=.08?100:r.wageGrowth<=.10?70:r.wageGrowth<=.12?35:10}
   if(o.name==='Pressupost realista'){return r.spend<=r.realBudget?100:r.spend<=r.realBudget*1.1?65:25}
-  if(o.name==='Mida ideal'){const n=state.squad.length;if(!n)return 0;if(n>=23&&n<=26)return 100;if(n===22||n===27)return 65;return 25}
+  if(o.name==='Mida ideal'){const n=activeSquad().length;if(!n)return 0;if(n>=23&&n<=26)return 100;if(n===22||n===27)return 65;return 25}
   if(o.name==='Mercat selectiu'){const relevant=r.penalties.filter(p=>p.cat==='Mercat').reduce((a,p)=>a+p.pts,0);return Math.max(0,100-relevant*12)}
   if(o.name==='Identitat Barça'){const lost=r.penalties.filter(p=>p.cat==='Identitat').reduce((a,p)=>a+p.pts,0);return Math.max(0,100-lost*15)}
   if(o.name==='Cantera amb pes real'){if(!state.youth.length)return 0;return state.youth.some(y=>num(y.minutes)>=1000||num(y.appearances)>=20)?100:Math.min(85,Math.round(Math.max(...state.youth.map(y=>Math.max(num(y.minutes)/1000,num(y.appearances)/20)))*100))}
@@ -1979,7 +1979,9 @@ function renderDashboard(){const r=realism(),played=state.matches.length,totalPt
  const groups={GK:0,DEF:0,MID:0,ATT:0};state.squad.forEach(p=>groups[positionGroup(p.pos)]++);const total=state.squad.length;$('#donutTotal').textContent=total;const cols=['#c5d0de','#7f8ba0','#62b3ff','#1765d8'];let acc=0,parts=[];Object.values(groups).forEach((v,i)=>{const pct=total?v/total*100:25;parts.push(`${cols[i]} ${acc}% ${acc+pct}%`);acc+=pct});$('#squadDonut').style.background=`conic-gradient(${parts.join(',')})`;$('#positionLegend').innerHTML=[['POR','GK','pos-gk'],['DEF','DEF','pos-def'],['MIG','MID','pos-mid'],['ATA','ATT','pos-att']].map(x=>`<div class="legend-row"><span><i class="legend-dot ${x[2]}"></i>${x[0]}</span><strong>${groups[x[1]]}</strong></div>`).join('');const ages=state.squad.map(p=>num(p.age)).filter(Boolean);$('#avgAge').textContent=ages.length?`${(ages.reduce((a,b)=>a+b,0)/ages.length).toFixed(1)} EDAT MITJANA`:'— EDAT MITJANA';const ageCounts=[ages.filter(a=>a<=21).length,ages.filter(a=>a>=22&&a<=28).length,ages.filter(a=>a>=29).length];$('#ageBands').innerHTML=[['U21',ageCounts[0]],['22–28',ageCounts[1]],['29+',ageCounts[2]]].map(x=>`<div class="age-band"><span>${x[0]}</span><strong>${x[1]} jug.</strong></div>`).join('');
  $('#transferCount').textContent=`${state.transfers.length} OPS`;$('#spendValue').textContent=money(r.spend);$('#salesValue').textContent=money(r.sales);const max=Math.max(r.spend,r.sales,1);$('#spendBar').style.width=`${r.spend/max*100}%`;$('#salesBar').style.width=`${r.sales/max*100}%`;$('#transferNetLarge').textContent=money(r.net);$('#transferVerdict').textContent=!state.transfers.length?'Mercat encara sense activitat':r.spend<=r.realBudget?'Dins del pressupost operatiu':'Pressupost realista superat';$('#recentTransfers').innerHTML=state.transfers.slice(-3).reverse().map(t=>`<div class="recent-transfer"><span><strong>${t.player}</strong> · ${t.type}</span><span>${money(t.amount)}</span></div>`).join('');
  $('#alertCount').textContent=`${r.alerts.filter(a=>a[0]!=='OK').length} ALERTES`;$('#priorityAlerts').innerHTML=r.alerts.slice(0,3).map(a=>`<div class="priority-card ${a[3]}"><span class="priority">${a[0]}</span><strong>${a[1]}</strong><small>${a[2]}</small></div>`).join('');const marketPenalty=r.penalties.filter(p=>p.cat==='Mercat').reduce((a,p)=>a+p.pts,0),identityPenalty=r.penalties.filter(p=>p.cat==='Identitat').reduce((a,p)=>a+p.pts,0);const health=[['Mercat',marketPenalty===0?'Controlat':marketPenalty<=3?'Vigilar':'En risc',marketPenalty===0?'green':marketPenalty<=3?'amber':'red'],['Escala salarial',r.wageGrowth<=.08?'Sana':r.wageGrowth<=.10?'Vigilar':'Fora de rang',r.wageGrowth<=.08?'green':r.wageGrowth<=.10?'amber':'red'],['Mida plantilla',!activeSquad().length?'Pendent':activeSquad().length>=22&&activeSquad().length<=25?'Correcta':'Revisar',!activeSquad().length?'amber':activeSquad().length>=22&&activeSquad().length<=25?'green':'amber'],['Identitat',identityPenalty?'En risc':'Coherent',identityPenalty?'amber':'green']];$('#healthList').innerHTML=health.map(x=>`<div class="health-item"><div class="health-label"><strong>${x[0]}</strong><small>Regles de la temporada</small></div><span class="pill ${x[2]}">${x[1]}</span></div>`).join('');}
-function isLoanedOut(p){return p.ownership==='Cedit fora'}
+function isLoanedOut(p){
+  return p?.ownership==='Cedit fora' || Boolean(String(p?.destinationClub||'').trim());
+}
 function activeSquad(){return (state.squad||[]).filter(p=>!isLoanedOut(p))}
 function playerLinkHtml(p){
   if(p.ownership==='Cedit al Barça'){
@@ -2459,7 +2461,7 @@ nav();render();renderSquadTablesOnly();renderLineupEditor();setTimeout(()=>{rend
 const bootBanner=$('#squadHydrationStatus');
 if(bootBanner){
   const bootSquad=(state.squad||[]);
-  bootBanner.textContent='Plantilla carregada · '+bootSquad.filter(p=>p.ownership!=='Cedit fora').length+' actius · '+bootSquad.filter(p=>p.ownership==='Cedit fora').length+' cedits fora';
+  bootBanner.textContent='Plantilla carregada · '+bootSquad.filter(p=>!isLoanedOut(p)).length+' actius · '+bootSquad.filter(p=>isLoanedOut(p)).length+' cedits fora';
   bootBanner.className='sync-banner ok';
   setTimeout(()=>bootBanner.classList.add('hidden'),1200);
 }
