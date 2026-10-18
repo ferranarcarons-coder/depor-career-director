@@ -2472,7 +2472,7 @@ setTimeout(()=>cloudLoad(),50);
       const f=await r.json();
       const setVal=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val};
       const setText=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val};
-      setVal('finInitialBudget','150,4 M€');
+      setVal('finInitialBudget',euroM(f.initialBudget));
       setVal('finOperationalOpening',euroM(f.initialBudget));
       setVal('finBudget',euroM(f.available));
       setVal('finInitialWages',wageK(f.initialWages));
