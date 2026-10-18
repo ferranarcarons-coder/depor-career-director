@@ -190,7 +190,7 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
 .exec-plan{display:grid;gap:8px;padding:12px}
 .exec-plan-item{display:grid;grid-template-columns:28px 1fr;gap:9px;align-items:start;padding:9px;border:1px solid #edf1f5;border-radius:10px;background:#fafcff}
 .exec-plan-item strong{font-size:10px}.exec-plan-item p{margin:3px 0 0;font-size:10px;line-height:1.45;color:var(--muted)}
-.squad-planner{margin:16px 0 18px}.planner-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.planner-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.planner-stat small{display:block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}.planner-stat strong{font-size:18px}.planner-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.planner-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}.planner-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.planner-card-head strong{font-size:12px}.planner-status{font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 7px;border-radius:999px}.planner-status.good{background:#e9f7f0;color:var(--green)}.planner-status.warn{background:#fff5df;color:var(--amber)}.planner-status.bad{background:#fdecec;color:var(--red)}.planner-player{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #eef2f6;font-size:10px}.planner-player:first-of-type{border-top:0}.planner-player small{color:var(--muted)}.hierarchy-chip{display:inline-block;padding:4px 7px;border-radius:999px;font-size:8px;font-weight:800;letter-spacing:.04em;background:#edf3fb;color:#33506f}.hierarchy-chip.titular{background:#e9f7f0;color:var(--green)}.hierarchy-chip.prescindible{background:#fdecec;color:var(--red)}.hierarchy-chip.desenvolupament{background:#eef0ff;color:#5657a8}@media(max-width:1050px){.planner-grid{grid-template-columns:1fr 1fr}.planner-summary{grid-template-columns:1fr 1fr}}@media(max-width:720px){.planner-grid,.planner-summary{grid-template-columns:1fr}}
+.squad-planner{margin:16px 0 18px}.planner-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0}.planner-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.planner-stat small{display:block;font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}.planner-stat strong{font-size:18px}.planner-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.planner-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px}.planner-card-head{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px}.planner-card-head strong{font-size:12px}.planner-status{font-size:8px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 7px;border-radius:999px}.planner-status.good{background:#e9f7f0;color:var(--green)}.planner-status.warn{background:#fff5df;color:var(--amber)}.planner-status.bad{background:#fdecec;color:var(--red)}.planner-player{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #eef2f6;font-size:10px}.planner-player:first-of-type{border-top:0}.planner-player small{color:var(--muted)}.hierarchy-chip{display:inline-block;padding:4px 7px;border-radius:999px;font-size:8px;font-weight:800;letter-spacing:.04em;background:#edf3fb;color:#33506f}.hierarchy-chip.titular{background:#e9f7f0;color:var(--green)}.hierarchy-chip.prescindible{background:#fdecec;color:var(--red)}.hierarchy-chip.desenvolupament{background:#eef0ff;color:#5657a8}.contract-manager{margin:0 0 18px}.contract-risk{display:inline-block;padding:4px 7px;border-radius:999px;font-size:8px;font-weight:800;letter-spacing:.04em}.contract-risk.low{background:#e9f7f0;color:var(--green)}.contract-risk.medium{background:#fff5df;color:var(--amber)}.contract-risk.high,.contract-risk.critical{background:#fdecec;color:var(--red)}.contract-action{font-size:9px;font-weight:800}.contract-table td small{color:var(--muted)}@media(max-width:1050px){.planner-grid{grid-template-columns:1fr 1fr}.planner-summary{grid-template-columns:1fr 1fr}}@media(max-width:720px){.planner-grid,.planner-summary{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -375,11 +375,15 @@ th.sortable.sort-desc::after{content:' ↓';opacity:1}
         <div id="squadPlannerSummary" class="planner-summary"></div>
         <div id="squadPlannerGrid" class="planner-grid"></div>
       </div>
+      <div class="panel contract-manager">
+        <div class="panel-head"><div><p class="eyebrow">CONTRACT MANAGEMENT</p><h2>Risc contractual</h2></div><span id="contractRiskSummary">—</span></div>
+        <div class="table-wrap"><table class="contract-table"><thead><tr><th>Jugador</th><th>Jerarquia</th><th>Edat</th><th>Contracte</th><th>Risc</th><th>Acció recomanada</th><th>Motiu</th></tr></thead><tbody id="contractRiskTable"></tbody></table></div>
+      </div>
       <div id="squadAnalysisPanel" class="panel squad-analysis-panel">
         <div class="panel-head"><div><p class="eyebrow">SPORTING DIRECTOR REVIEW</p><h2>Anàlisi de plantilla</h2></div><span id="squadAnalysisTactic">4-3-3</span></div>
         <div id="squadAnalysisContent" class="squad-analysis-content"><p>Carrega la plantilla i prem “Analitzar plantilla” per rebre una recomanació esportiva segons el sistema de joc.</p></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol EA</th><th class="sortable" data-squad-sort="sportingHierarchy">Jerarquia</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th>% sou Barça</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th class="sortable" data-squad-sort="name">Jugador</th><th class="sortable" data-squad-sort="pos">Pos.</th><th class="sortable" data-squad-sort="age">Edat</th><th class="sortable" data-squad-sort="role">Rol EA</th><th class="sortable" data-squad-sort="sportingHierarchy">Jerarquia</th><th class="sortable" data-squad-sort="ownership">Vinculació</th><th class="sortable" data-squad-sort="duration">Durada</th><th class="sortable" data-squad-sort="baseOvr">OVR base</th><th class="sortable" data-squad-sort="currentOvr">OVR Career</th><th class="sortable" data-squad-sort="delta">Δ OVR</th><th class="sortable" data-squad-sort="updated">Últ. update</th><th class="sortable" data-squad-sort="value">Valor €M</th><th class="sortable" data-squad-sort="wage">Sou k€/set.</th><th>% sou Barça</th><th class="sortable" data-squad-sort="contractYears">Durada contracte</th><th>Risc contracte</th><th></th></tr></thead><tbody id="squadTable"></tbody></table></div>
       <div class="loaned-out-section">
         <div class="subhead"><strong>CEDITS FORA</strong><span id="loanedOutCount">0 JUGADORS</span></div>
         <div class="table-wrap"><table><thead><tr><th class="sortable" data-loan-sort="name">Jugador</th><th class="sortable" data-loan-sort="pos">Pos.</th><th class="sortable" data-loan-sort="age">Edat</th><th class="sortable" data-loan-sort="destinationClub">Club destí</th><th class="sortable" data-loan-sort="loanYears">Durada cessió</th><th class="sortable" data-loan-sort="currentOvr">OVR</th><th class="sortable" data-loan-sort="value">Valor €M</th><th class="sortable" data-loan-sort="wage">Sou k€/set.</th><th class="sortable" data-loan-sort="wageShareDepor">% sou Barça</th><th class="sortable" data-loan-sort="purchaseOptionValue">Opció compra</th><th></th></tr></thead><tbody id="loanedOutTable"></tbody></table></div>
@@ -1591,15 +1595,43 @@ function ageStructureAnalysis(){
   if(young.length<3){score-=8;issues.push('Poca base jove: només '+young.length+' jugadors de 23 anys o menys.');}
   return {score:Math.max(0,score),avg,xiAvg,veterans,young,issues};
 }
+function contractDecision(p){
+  if(!p||p.ownership==='Cedit al Barça')return {level:'Baix',cls:'low',score:0,action:'Revisar cessió',reason:'No és contracte propi del Barça'};
+  const y=num(p.contractYears),age=num(p.age),ovr=playerCareerOvr(p),h=sportingHierarchy(p);
+  const important=['Titular','Rotació'].includes(h)||ovr>=82||roleWeight(p.role)>=4;
+  const expendable=h==='Prescindible'||(h==='Suplent'&&ovr<78);
+  if(!y)return {level:'Dades pendents',cls:'medium',score:35,action:'COMPLETAR CONTRACTE',reason:'No hi ha durada contractual fiable'};
+  if(y<=1){
+    if(important&&age<=31)return {level:'Crític',cls:'critical',score:100,action:'RENOVAR ARA',reason:'Peça important amb ≤1 any de contracte'};
+    if(expendable||age>=32)return {level:'Alt',cls:'high',score:82,action:'VENDRE / DEIXAR EXPIRAR',reason:'Contracte curt i prioritat esportiva baixa'};
+    return {level:'Alt',cls:'high',score:86,action:'DECIDIR ARA',reason:'≤1 any: renovar o vendre abans de perdre valor'};
+  }
+  if(y<=2){
+    if(important)return {level:'Mitjà-alt',cls:'medium',score:65,action:'PREPARAR RENOVACIÓ',reason:'Peça important entrant en finestra de renovació'};
+    if(age>=30||expendable)return {level:'Mitjà',cls:'medium',score:52,action:'AVALUAR SORTIDA',reason:'2 anys restants: bon moment per decidir continuïtat'};
+    return {level:'Mitjà',cls:'medium',score:45,action:'MONITORAR',reason:'Encara hi ha marge, però ja entra en zona de decisió'};
+  }
+  if(y<=3&&age>=30&&important)return {level:'Baix-mitjà',cls:'medium',score:30,action:'PLANIFICAR SUCCESSIÓ',reason:'Veterà important amb horitzó contractual mitjà'};
+  return {level:'Baix',cls:'low',score:10,action:'SENSE URGÈNCIA',reason:'Contracte amb marge suficient'};
+}
 function contractRiskAnalysis(){
-  const starters=lineupStarterIdSet(),issues=[];let score=100;
-  activeSquad().forEach(p=>{
-    if(p.ownership==='Cedit al Barça')return;
-    const y=num(p.contractYears),important=roleWeight(p.role)>=4||starters.has(p.playerId);
-    if(important&&y>0&&y<=1){score-=16;issues.push(p.name+' és important i acaba contracte en ≤1 any.');}
-    else if(important&&y>1&&y<=2){score-=7;issues.push(p.name+' entra en zona de renovació: '+y+' anys de contracte.');}
-  });
-  return {score:Math.max(0,score),issues:issues.slice(0,5)};
+  const rows=activeSquad().filter(p=>p.ownership!=='Cedit al Barça').map(p=>({p,...contractDecision(p)})).sort((a,b)=>b.score-a.score);
+  let score=100;
+  rows.forEach(x=>{if(x.score>=90)score-=14;else if(x.score>=70)score-=9;else if(x.score>=50)score-=5;});
+  const issues=rows.filter(x=>x.score>=50).slice(0,6).map(x=>x.p.name+': '+x.action.toLowerCase()+' · '+x.reason+'.');
+  return {score:Math.max(0,score),issues,rows};
+}
+function renderContractManager(){
+  const tb=$('#contractRiskTable'),sum=$('#contractRiskSummary');if(!tb)return;
+  const a=contractRiskAnalysis(),rows=(a.rows||[]).filter(x=>x.score>=30).slice(0,12);
+  const urgent=(a.rows||[]).filter(x=>x.score>=80).length;
+  if(sum)sum.textContent=urgent?urgent+' DECISIÓ'+(urgent===1?'':'NS')+' URGENT'+(urgent===1?'':'S'):'SENSE URGÈNCIES';
+  tb.innerHTML=rows.length?rows.map(x=>{
+    const p=x.p,y=num(p.contractYears);
+    return '<tr><td><strong>'+p.name+'</strong><br><small>'+displayPosEs(p.pos)+' · OVR '+playerCareerOvr(p)+'</small></td>'+
+      '<td>'+sportingHierarchy(p)+'</td><td>'+num(p.age)+'</td><td>'+(y?y+' any'+(y===1?'':'s'):'Pendent')+'</td>'+
+      '<td><span class="contract-risk '+x.cls+'">'+x.level+'</span></td><td><span class="contract-action">'+x.action+'</span></td><td>'+x.reason+'</td></tr>';
+  }).join(''):'<tr><td colspan="7">No hi ha cap risc contractual rellevant.</td></tr>';
 }
 function emotionalFitAnalysis(){
   const linked=activeSquad().filter(p=>String(p.favoriteClub||'').trim());
@@ -2170,13 +2202,14 @@ function renderSquadTablesOnly(){
     const activeEntries=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>!isLoanedOut(x.p)),squadSort);
     activeBody.innerHTML=activeEntries.map(({p,i})=>{
       const d=ovrDelta(p);
-      return '<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td><span class="hierarchy-chip '+hierarchyClass(sportingHierarchy(p))+'">'+sportingHierarchy(p)+'</span></td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
+      return '<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.role||'—')+'</td><td><span class="hierarchy-chip '+hierarchyClass(sportingHierarchy(p))+'">'+sportingHierarchy(p)+'</span></td><td>'+playerLinkHtml(p)+'</td><td>'+playerLinkEnd(p)+'</td><td>'+(playerBaseOvr(p)||'—')+'</td><td><strong>'+(playerCareerOvr(p)||'—')+'</strong></td><td>'+deltaHtml(d)+'</td><td>'+(p.ovrUpdatedAt||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+effectiveDeporWageShare(p)+'%</td><td>'+(p.ownership==='Cedit al Barça'?'—':(num(p.contractYears)?num(p.contractYears)+' any'+(num(p.contractYears)===1?'':'s'):'—'))+'</td><td>'+(p.ownership==='Cedit al Barça'?'—':'<span class="contract-risk '+contractDecision(p).cls+'">'+contractDecision(p).level+'</span>')+'</td><td><button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="ghost-btn" onclick="updatePlayerOvr('+i+')">OVR</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>';
     }).join('');
     const loanedOut=sortedPlayerEntries((state.squad||[]).map((p,i)=>({p,i})).filter(x=>isLoanedOut(x.p)),loanSort);
     const count=$('#loanedOutCount');if(count)count.textContent=loanedOut.length+' JUGADOR'+(loanedOut.length===1?'':'S');
     loanBody.innerHTML=loanedOut.length?loanedOut.map(({p,i})=>'<tr><td><strong>'+p.name+'</strong></td><td>'+displayPosEs(p.pos)+'</td><td>'+(p.age||'—')+'</td><td>'+(p.destinationClub||'—')+'</td><td>'+(num(p.loanYears)?num(p.loanYears)+' any'+(num(p.loanYears)===1?'':'s'):'—')+'</td><td>'+(playerCareerOvr(p)||'—')+'</td><td>'+valueMDisplay(p.value)+'</td><td>'+wageKDisplay(p.wage)+'</td><td>'+num(p.wageShareDepor)+'%</td><td>'+(p.purchaseOptionType==='Opció de compra'&&num(p.purchaseOptionValue)?valueMDisplay(p.purchaseOptionValue)+' M€':'—')+'</td><td><button class="ghost-btn" onclick="returnLoanedPlayer('+i+')">Retorna</button> <button class="ghost-btn" onclick="editSquadPlayer('+i+')">Fitxa</button> <button class="icon-btn" onclick="removeItem(\'squad\','+i+')">✕</button></td></tr>').join(''):'<tr><td colspan="11">No hi ha jugadors del Barça cedits fora.</td></tr>';
     bindSquadSortHeaders();
     renderSquadPlanner();
+    renderContractManager();
   }catch(e){console.error('squad-only render',e)}
 }
 function renderFinancePanel(){
