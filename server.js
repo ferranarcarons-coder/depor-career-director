@@ -259,6 +259,30 @@ async function initDb() {
     }
   }catch(e){console.warn('[BARCA_WAGE_BASELINE_ERROR]',e.message);}
 
+  // Manual FC27 squad snapshot supplied by the user: goalkeepers, 18 Oct 2026.
+  try{
+    const normalizeSnapshotName=(v)=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+    const goalkeeperSnapshot=[
+      {match:['joan garcia','joan garcia pons'],patch:{pos:'POR',age:25,baseOvr:86,currentOvr:86,potential:89,value:55,wage:120000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:5,loanYears:0,realClub:'FC Barcelona'}},
+      {match:['wojciech szczesny','wojciech tomasz szczesny'],patch:{pos:'POR',age:36,baseOvr:80,currentOvr:80,potential:87,value:0.55,wage:53000,ownership:'Propietat',parentClub:'',destinationClub:'',contractYears:1,loanYears:0,realClub:'FC Barcelona'}},
+      {match:['diego kochen'],patch:{pos:'POR',age:20,baseOvr:62,currentOvr:62,potential:79,value:0.35,wage:8000,ownership:'Cedit fora',parentClub:'FC Barcelona',destinationClub:'Lyngby Boldklub',loanYears:1,realClub:'Lyngby Boldklub'}},
+      {match:['aron yaakobishvili'],patch:{pos:'POR',age:20,baseOvr:69,currentOvr:69,potential:85,value:1.2,wage:18000,ownership:'Cedit fora',parentClub:'FC Barcelona',destinationClub:'UD Almeria',loanYears:1,realClub:'UD Almería'}},
+      {match:['marc andre ter stegen','marc andre terstegen'],patch:{pos:'POR',age:34,baseOvr:82,currentOvr:82,potential:90,value:5,wage:321000,ownership:'Cedit fora',parentClub:'FC Barcelona',destinationClub:'Ajax',loanYears:1,realClub:'Ajax'}}
+    ];
+    const rows=await pool.query('SELECT player_id,data FROM squad_players');
+    let updated=0;
+    for(const row of rows.rows){
+      const current=row.data||{};
+      const name=normalizeSnapshotName(current.name);
+      const snap=goalkeeperSnapshot.find(x=>x.match.some(m=>name.includes(m)));
+      if(!snap)continue;
+      const next={...current,...snap.patch,ovrUpdatedAt:'18/10/2026',manualSnapshotSource:'SoFIFA FC27 · user screenshots · 18/10/2026'};
+      await pool.query('UPDATE squad_players SET data=$2::jsonb,updated_at=NOW() WHERE player_id=$1',[row.player_id,JSON.stringify(next)]);
+      updated++;
+    }
+    console.log('[MANUAL_SQUAD_SNAPSHOT_GK]',JSON.stringify({updated,total:goalkeeperSnapshot.length}));
+  }catch(e){console.warn('[MANUAL_SQUAD_SNAPSHOT_GK_ERROR]',e.message);}
+
   dbReady = true;
   return true;
 }
