@@ -671,15 +671,16 @@ const base={directorChat:[],season:'2026/27',position:'—',target:'Guanyar LaLi
 const localBootState=JSON.parse(localStorage.getItem(KEY)||'null');
 const serverBootState=window.__SERVER_STATE__&&typeof window.__SERVER_STATE__==='object'?window.__SERVER_STATE__:null;
 let state;
-if(localBootState&&serverBootState){
-  const localStamp=Number(localBootState._clientUpdatedAt||0),serverStamp=Number(serverBootState._clientUpdatedAt||0);
-  // The server squad is authoritative because it now comes from its own dedicated table.
-  state={...(serverStamp>localStamp?serverBootState:localBootState),squad:(serverBootState.squad||[]),_clientUpdatedAt:Math.max(localStamp,serverStamp)};
-}else{
-  state=localBootState||serverBootState||structuredClone(base);
+{
+  const localStamp=Number(localBootState?._clientUpdatedAt||0);
+  const serverStamp=Number(serverBootState?._clientUpdatedAt||0);
+  const metaSource=localBootState&&serverBootState
+    ? (serverStamp>localStamp?serverBootState:localBootState)
+    : (localBootState||serverBootState||structuredClone(base));
+  state={...metaSource,squad:Array.isArray(serverBootState?.squad)?serverBootState.squad:[]};
 }
 state={...structuredClone(base),...state,directorChat:state.directorChat||[],lineup:{starters:{...((state.lineup&&state.lineup.starters)||{})},bench:[...((state.lineup&&state.lineup.bench)||[])]},finance:{...base.finance,...(state.finance||{})},setup:{...base.setup,...(state.setup||{})},shortlist:state.shortlist||[],latestAssessment:state.latestAssessment||null,matches:state.matches||[],nextMatch:{...base.nextMatch,...(state.nextMatch||{})},standings:state.standings||[],decisions:(state.decisions||[]).map(d=>({...d,status:d.status||'open',createdAt:d.createdAt||'',recommendation:d.recommendation||'',deadline:d.deadline||'',resolution:d.resolution||''})),reviews:state.reviews||[],points:Number(state.points||0)};
-localStorage.setItem(KEY,JSON.stringify(state));
+localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
 state.squad=(state.squad||[]).map(p=>{
   const baseOvr=num(p.baseOvr||p.ovr||p.currentOvr||0);
   const currentOvr=num(p.currentOvr||p.ovr||p.baseOvr||0);
@@ -712,24 +713,24 @@ state.squad=(state.squad||[]).map(p=>{
 });
 state.playerOvrOverrides=state.playerOvrOverrides||{};
 const RULES_OBJECTIVES_V2='barcaCareerDirectorRulesObjectivesV2';
-if(!localStorage.getItem(RULES_OBJECTIVES_V2)){const oldNames=new Set(['Guanyar LaLiga','Disciplina salarial','Identitat de club']);const custom=(state.objectives||[]).filter(o=>!oldNames.has(o.name));state.objectives=[...structuredClone(DEFAULT_OBJECTIVES),...custom];state.rules=structuredClone(DEFAULT_RULES);state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V2,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(RULES_OBJECTIVES_V2)){const oldNames=new Set(['Guanyar LaLiga','Disciplina salarial','Identitat de club']);const custom=(state.objectives||[]).filter(o=>!oldNames.has(o.name));state.objectives=[...structuredClone(DEFAULT_OBJECTIVES),...custom];state.rules=structuredClone(DEFAULT_RULES);state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V2,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const RULES_OBJECTIVES_V3='barcaCareerDirectorRulesObjectivesV3';
-if(!localStorage.getItem(RULES_OBJECTIVES_V3)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V3,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(RULES_OBJECTIVES_V3)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V3,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const RULES_OBJECTIVES_V4='barcaCareerDirectorRulesObjectivesV4';
-if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V4,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(RULES_OBJECTIVES_V4)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);localStorage.setItem(RULES_OBJECTIVES_V4,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const RULES_OBJECTIVES_V5='barcaCareerDirectorRulesObjectivesV5';
-if(!localStorage.getItem(RULES_OBJECTIVES_V5)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);state.target=base.target;state.clubStatus=base.clubStatus;state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V5,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(RULES_OBJECTIVES_V5)){state.objectives=structuredClone(DEFAULT_OBJECTIVES);state.rules=structuredClone(DEFAULT_RULES);state.target=base.target;state.clubStatus=base.clubStatus;state.projectStage=base.projectStage;localStorage.setItem(RULES_OBJECTIVES_V5,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const BARCA_FINANCE_V1='barcaCareerDirectorFinanceV1';
-if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=163.5;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(BARCA_FINANCE_V1)){state.finance=state.finance||{};state.finance.initialBudget=163.5;state.finance.budgetSource='FC 27 · Barça 2026/27';localStorage.setItem(BARCA_FINANCE_V1,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const BARCA_WAGE_BASELINE_V1='barcaCareerDirectorWageBaselineV1';
-if(!localStorage.getItem(BARCA_WAGE_BASELINE_V1)){state.finance=state.finance||{};state.finance.initialWeeklyWages=4800000;state.finance.wageBaselineSource='FAFIFA · FC Barcelona FC27 · 7 Oct 2026';localStorage.setItem(BARCA_WAGE_BASELINE_V1,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(BARCA_WAGE_BASELINE_V1)){state.finance=state.finance||{};state.finance.initialWeeklyWages=4800000;state.finance.wageBaselineSource='FAFIFA · FC Barcelona FC27 · 7 Oct 2026';localStorage.setItem(BARCA_WAGE_BASELINE_V1,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const BUDGET_BASELINE_2026_FIX='barcaCareerDirectorBudgetBaseline2026V1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_FIX)){
   state.finance=state.finance||{};
   state.finance.initialBudget=163.5;
   state.finance.budgetSource='EA available transfer budget';
   localStorage.setItem(BUDGET_BASELINE_2026_FIX,'1');
-  localStorage.setItem(KEY,JSON.stringify(state));
+  localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
 }
 const BUDGET_BASELINE_2026_STAFF_FIX='barcaCareerDirectorBudgetBaseline2026StaffV1';
 if(!localStorage.getItem(BUDGET_BASELINE_2026_STAFF_FIX)){
@@ -737,14 +738,15 @@ if(!localStorage.getItem(BUDGET_BASELINE_2026_STAFF_FIX)){
   state.finance.initialBudget=163.5;
   state.finance.budgetSource='EA available transfer budget after staff changes';
   localStorage.setItem(BUDGET_BASELINE_2026_STAFF_FIX,'1');
-  localStorage.setItem(KEY,JSON.stringify(state));
+  localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
 }
 const RESET_SEASON_FIX='barcaCareerDirectorResetSeasonEvolutionV1';
-if(!localStorage.getItem(RESET_SEASON_FIX)){state.matches=[];state.points=0;state.position=base.position;localStorage.setItem(RESET_SEASON_FIX,'1');localStorage.setItem(KEY,JSON.stringify(state));}
+if(!localStorage.getItem(RESET_SEASON_FIX)){state.matches=[];state.points=0;state.position=base.position;localStorage.setItem(RESET_SEASON_FIX,'1');localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}
 const $=s=>document.querySelector(s); const $$=s=>[...document.querySelectorAll(s)];
 
 let cloudSyncTimer=null;
 let cloudSyncEnabled=false;
+let squadHydrated=Boolean(serverBootState&&Array.isArray(serverBootState.squad));
 
 function normalizeLoadedSquad(list){
   const normName=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
@@ -805,11 +807,11 @@ function mergeIncomingState(remote){
     standings:remote.standings||[],
     decisions:(remote.decisions||[]).map(d=>({...d,status:d.status||'open'})),
     reviews:remote.reviews||[],
-    squad:normalizeLoadedSquad(remote.squad||[]),
+    squad:state.squad||[],
     playerOvrOverrides:remote.playerOvrOverrides||{},
     points:Number(remote.points||0)
   };
-  localStorage.setItem(KEY,JSON.stringify(state));
+  localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
 }
 
 async function fetchWithTimeout(url,options={},ms=6000){
@@ -835,11 +837,12 @@ async function loadDedicatedSquad(){
   if(!r.ok)throw new Error('squad load failed '+r.status);
   const data=await r.json();
   state.squad=normalizeLoadedSquad(data.squad||[]);
+  squadHydrated=true;
   ensureSquadIds();
   const autoLoanShareChanges=applyRealLifeLoanWageShares();
   ensureFinanceBaseline();
   lastSquadFingerprint=squadFingerprint(state.squad);
-  localStorage.setItem(KEY,JSON.stringify(state));
+  localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
   renderSquadTablesOnly();
   try{renderPerformance();}catch(e){}
   try{renderFinancePanel();}catch(e){}
@@ -847,6 +850,10 @@ async function loadDedicatedSquad(){
   return state.squad;
 }
 async function syncDedicatedSquad(force=false){
+  if(!squadHydrated){
+    console.warn('squad sync skipped: authoritative squad not hydrated');
+    return false;
+  }
   ensureSquadIds();
   const fp=squadFingerprint(state.squad);
   if(!force&&fp===lastSquadFingerprint)return true;
@@ -861,7 +868,7 @@ async function syncDedicatedSquad(force=false){
     const data=await r.json();
     if(Array.isArray(data.squad)) state.squad=normalizeLoadedSquad(data.squad);
     lastSquadFingerprint=squadFingerprint(state.squad);
-    localStorage.setItem(KEY,JSON.stringify(state));
+    localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
     return true;
   }catch(e){
     console.error('dedicated squad save',e);
@@ -882,7 +889,7 @@ async function cloudLoad(){
         const squad=state.squad;
         mergeIncomingState({...data.state,squad});
         state.squad=squad;
-        localStorage.setItem(KEY,JSON.stringify(state));
+        localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
       }
     }
     renderSquadTablesOnly();
@@ -916,7 +923,7 @@ function save(){
   backupStateSnapshot(state,'before-save');
   state._clientUpdatedAt=Date.now();
   ensureSquadIds();
-  localStorage.setItem(KEY,JSON.stringify(state));
+  localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));
   try{renderSquadTablesOnly();}catch(e){console.error('squad render after save',e)}
   try{render();}catch(e){console.error('app render after save',e)}
   try{syncDedicatedSquad();}catch(e){console.error('squad sync after save',e)}
@@ -1527,7 +1534,7 @@ async function enrichSquadFromFc27(){
       matched++;
     }catch(e){unmatched++;}
   }
-  ensureSquadIds();localStorage.setItem(KEY,JSON.stringify(state));render();await syncDedicatedSquad(true);
+  ensureSquadIds();localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));render();await syncDedicatedSquad(true);
   if(status){status.className='sync-banner '+(unmatched?'warn':'ok');status.textContent='BBDD FC27 · '+matched+' vinculats · '+unmatched+' sense match segur';}
   if(btn)btn.disabled=false;
 }
@@ -2485,7 +2492,7 @@ window.completeDecision=(i)=>resolveDecision(i);
 $('#addReviewBtn').onclick=()=>{const r=realism();modal('Nova Board Review',[{label:'Moment',name:'type',type:'select',options:['Revisió de gener','Revisió final','Revisió extraordinària']},{label:'Data / jornada',name:'date'},{label:'Veredicte',name:'verdict',type:'select',options:['On track','At risk','Off track']},{label:'Resum executiu',name:'summary',type:'textarea',full:1,placeholder:'Què funciona, què preocupa i què canviarem?'}],d=>state.reviews.push({...d,score:r.score,clubStatus:state.clubStatus,position:state.position}))};
 $('#setupSeason').onchange=e=>{state.season=e.target.value||state.season;save()};$('#setupStage').onchange=e=>{state.projectStage=e.target.value||state.projectStage;save()};$('#setupClubStatus').onchange=e=>{state.clubStatus=num(e.target.value);save()};$('#setupTarget').onchange=e=>{state.target=e.target.value||state.target;save()};$('#setupTactic').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#squadTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#lineupTacticSelect').onchange=e=>{state.tactic=e.target.value||'4-3-3';normalizeLineupForTactic();save()};$('#enrichSquadBtn').onclick=()=>enrichSquadFromFc27();$('#analyzeSquadBtn').onclick=()=>renderSquadAnalysis(true);
 $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='depor-career-data.json';a.click();URL.revokeObjectURL(a.href)};$('#importInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const reader=new FileReader();reader.onload=()=>{try{state={...structuredClone(base),...JSON.parse(reader.result)};save()}catch{alert('Fitxer no vàlid')}};reader.readAsText(f)};$('#resetBtn').onclick=()=>{if(confirm('Reiniciar totes les dades?')){state=structuredClone(base);save()}};
-state.squad=normalizeLoadedSquad(state.squad||[]);ensureSquadIds();const loanShareChanges=applyRealLifeLoanWageShares();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);if(loanShareChanges){localStorage.setItem(KEY,JSON.stringify(state));setTimeout(()=>syncDedicatedSquad(true),120);}
+state.squad=normalizeLoadedSquad(state.squad||[]);ensureSquadIds();const loanShareChanges=applyRealLifeLoanWageShares();ensureFinanceBaseline();lastSquadFingerprint=squadFingerprint(state.squad);if(loanShareChanges){localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));setTimeout(()=>syncDedicatedSquad(true),120);}
 nav();render();renderSquadTablesOnly();renderLineupEditor();setTimeout(()=>{renderSquadTablesOnly();renderLineupEditor();},50);
 const bootBanner=$('#squadHydrationStatus');
 if(bootBanner){
@@ -2628,7 +2635,7 @@ setTimeout(()=>cloudLoad(),50);
           if(!state.transfers.some(t=>t.operationId&&t.operationId===out.sale.operationId))state.transfers.push(out.sale);
           state.squad=(state.squad||[]).filter(p=>p.playerId!==out.removedPlayerId);
           state._clientUpdatedAt=Date.now();
-          try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}
+          try{localStorage.setItem(KEY,JSON.stringify({...state,squad:[]}));}catch(e){}
         }
         if(status){status.className='sync-banner ok';status.textContent='Venda registrada i jugador eliminat de la plantilla.';}
         saleDlg.close();if(window.__refreshMarketHistory)await window.__refreshMarketHistory();setTimeout(()=>window.location.reload(),350);
@@ -2680,6 +2687,8 @@ setTimeout(()=>cloudLoad(),50);
 </script>
 <script>
 (function(){
+  // Legacy API renderer disabled: renderSquadTablesOnly is now the single squad renderer.
+  return;
   const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   let activeSort={key:'name',dir:1};
   let loanSort={key:'name',dir:1};
